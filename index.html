@@ -18,16 +18,15 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 // ============================================================
-// SAFE INTERCEPTOR — Usability Study App (v2)
+// SAFE INTERCEPTOR — Usability Study App (v3)
 // Three-condition within-subject comparison
 // + 2 legitimate false-positive scenarios
-// + mailto auto-submit for results
+// + neutral button language + equalised prominence
 // ============================================================
 
 // ---------- RESEARCHER CONFIG ----------
 const RESEARCHER_EMAIL = "YOUR_EMAIL@university.ac.uk"; // ← CHANGE THIS (fallback mailto only)
 const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdbohhm89hBl6fSTmqMxKpq0fh9NyUVKrDwJF0QGghHpDsSqg/formResponse";
-// Shortened link for reference: https://forms.gle/hiBjh1uCCUDt5fBF7
 const GOOGLE_FORM_ENTRY = "entry.29079367";
 
 // ---------- STUDY CONFIGURATION ----------
@@ -324,9 +323,6 @@ const PHISHING_SCENARIOS = [
 ];
 
 // ---------- LEGITIMATE (FALSE-POSITIVE) SCENARIOS ----------
-// These are NOT phishing — the warning is a false alarm.
-// Correct decision is to PROCEED. Always shown with Condition B.
-
 const LEGITIMATE_SCENARIOS = [
   {
     id: "L1",
@@ -422,7 +418,6 @@ const LATIN_SQUARES = [
 
 const CONDITION_LABELS = { A: "Generic Warning", B: "Warning + Reasons", C: "Skill-Based Coach" };
 
-// Build the 8-scenario sequence: 6 phishing + 2 legit inserted at positions 4 and 7
 function buildScenarioSequence(latinGroup) {
   const conditionOrder = LATIN_SQUARES[latinGroup];
   const phishing = PHISHING_SCENARIOS.map((s, i) => ({
@@ -434,7 +429,6 @@ function buildScenarioSequence(latinGroup) {
     condition: "B",
   }));
 
-  // Insert L1 after 3rd phishing (index 3), L2 after 5th phishing (index 6 after first insert)
   const sequence = [...phishing];
   sequence.splice(3, 0, legit[0]);
   sequence.splice(6, 0, legit[1]);
@@ -524,6 +518,25 @@ function PageMockup({ scenario }) {
   );
 }
 
+// ---------- BUTTON STYLES (EQUALISED PROMINENCE) ----------
+
+const btnLeave = {
+  background: "#fff", color: "#1a1a1a", border: "2px solid #d1d5db", borderRadius: 8,
+  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
+};
+const btnContinue = {
+  background: "#fff", color: "#1a1a1a", border: "2px solid #d1d5db", borderRadius: 8,
+  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
+};
+const btnLeaveCoach = {
+  background: "#fff", color: "#1e40af", border: "2px solid #93c5fd", borderRadius: 8,
+  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
+};
+const btnNext = {
+  background: "#1e40af", color: "#fff", border: "none", borderRadius: 10,
+  padding: "12px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 16,
+};
+
 // ---------- INTERVENTION PANELS ----------
 
 function ConditionA({ intervention, onProceed, onGoBack }) {
@@ -539,8 +552,8 @@ function ConditionA({ intervention, onProceed, onGoBack }) {
         {intervention.body}
       </p>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onGoBack} style={btnPrimary}>← Go back to safety</button>
-        <button onClick={onProceed} style={btnSecondary}>Proceed anyway</button>
+        <button onClick={onGoBack} style={btnLeave}>← Leave this page</button>
+        <button onClick={onProceed} style={btnContinue}>Continue to site</button>
       </div>
     </div>
   );
@@ -562,8 +575,8 @@ function ConditionB({ intervention, onProceed, onGoBack }) {
         {intervention.reasons.map((r, i) => <li key={i} style={{ marginBottom: 4 }}>{r}</li>)}
       </ul>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onGoBack} style={btnPrimary}>← Go back to safety</button>
-        <button onClick={onProceed} style={btnSecondary}>Proceed anyway</button>
+        <button onClick={onGoBack} style={btnLeave}>← Leave this page</button>
+        <button onClick={onProceed} style={btnContinue}>Continue to site</button>
       </div>
     </div>
   );
@@ -601,31 +614,12 @@ function ConditionC({ intervention, onProceed, onGoBack }) {
         </p>
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onGoBack} style={btnPrimaryBlue}>← Got it, take me back</button>
-        <button onClick={onProceed} style={btnSecondary}>Proceed anyway</button>
+        <button onClick={onGoBack} style={btnLeaveCoach}>← Leave this page</button>
+        <button onClick={onProceed} style={btnContinue}>Continue to site</button>
       </div>
     </div>
   );
 }
-
-// ---------- BUTTON STYLES ----------
-
-const btnPrimary = {
-  background: "#1a1a1a", color: "#fff", border: "none", borderRadius: 8,
-  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-const btnPrimaryBlue = {
-  background: "#1e40af", color: "#fff", border: "none", borderRadius: 8,
-  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-const btnSecondary = {
-  background: "#f3f4f6", color: "#555", border: "1px solid #d1d5db", borderRadius: 8,
-  padding: "10px 18px", fontSize: 14, cursor: "pointer",
-};
-const btnNext = {
-  background: "#1e40af", color: "#fff", border: "none", borderRadius: 10,
-  padding: "12px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 16,
-};
 
 // ---------- DATA EXPORT ----------
 
@@ -689,7 +683,7 @@ function ConsentPage({ onConsent }) {
           Safe Interceptor: Warning Design Evaluation
         </h1>
         <p style={{ color: "#555", fontSize: 15, lineHeight: 1.6, margin: "0 0 20px" }}>
-          Thank you for taking part in this study. You will be shown 8 simulated web scenarios, each with a security warning. For each one, you will decide whether to proceed or go back, answer a short question, and rate your confidence. The study takes approximately 15\u201320 minutes.
+          Thank you for taking part in this study. You will be shown 8 simulated web scenarios, each with a security warning. For each one, you will decide whether to proceed or leave the page, answer a short question, and rate your confidence. The study takes approximately 15–20 minutes.
         </p>
         <div style={{ background: "#f8fafc", borderRadius: 10, padding: "16px 18px", marginBottom: 20, fontSize: 14, lineHeight: 1.6, color: "#444" }}>
           <strong>Key information:</strong><br />
@@ -697,7 +691,7 @@ function ConsentPage({ onConsent }) {
           • Your responses are anonymous and identified only by a random code<br />
           • You may withdraw at any time by closing the browser tab<br />
           • Data will be used solely for academic research purposes<br />
-          • At the end, you will be asked to send your results via one email
+          • At the end, your results will be submitted automatically
         </div>
         <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 14, color: "#333" }}>
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)}
@@ -728,7 +722,7 @@ function DemographicsPage({ onSubmit }) {
         <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 20px", color: "#111" }}>About You</h2>
 
         <FieldLabel label="Age range">
-          <SelectGroup options={["18\u201324", "25\u201334", "35\u201344", "45\u201354", "55\u201364", "65+"]} value={age} onChange={setAge} />
+          <SelectGroup options={["18–24", "25–34", "35–44", "45–54", "55–64", "65+"]} value={age} onChange={setAge} />
         </FieldLabel>
 
         <FieldLabel label="Gender">
@@ -810,7 +804,7 @@ function ScenarioPage({ scenario, scenarioIndex, total, onComplete }) {
         {phase === "decision" && (
           <>
             <p style={{ fontSize: 14, color: "#555", margin: "0 0 12px", lineHeight: 1.5 }}>
-              You are browsing the internet and arrive at the following page. A security warning has appeared. Review the page and the warning, then decide what to do.
+              Imagine you are going about your normal day online. You have arrived at the page shown below — it might be something you intended to visit, or something you reached via a link. A security warning has appeared. Look at both the page and the warning, then choose what you would do.
             </p>
 
             <PageMockup scenario={scenario} />
