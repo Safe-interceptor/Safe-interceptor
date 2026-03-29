@@ -15,424 +15,519 @@
 <body>
   <div id="root"></div>
   <script type="text/babel" data-type="module">
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
 
 // ============================================================
-// SAFE INTERCEPTOR — Usability Study App (v3)
-// Three-condition within-subject comparison
-// + 2 legitimate false-positive scenarios
-// + neutral button language + equalised prominence
+// SAFE INTERCEPTOR — Usability Study App (v3.1)
+// Multilingual: English, Polish, Italian
+// Three-condition within-subject + 2 legitimate false-positive
+// Neutral buttons + equalised prominence
 // ============================================================
 
-// ---------- RESEARCHER CONFIG ----------
-const RESEARCHER_EMAIL = "YOUR_EMAIL@university.ac.uk"; // ← CHANGE THIS (fallback mailto only)
+const RESEARCHER_EMAIL = "YOUR_EMAIL@university.ac.uk";
 const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdbohhm89hBl6fSTmqMxKpq0fh9NyUVKrDwJF0QGghHpDsSqg/formResponse";
 const GOOGLE_FORM_ENTRY = "entry.29079367";
 
-// ---------- STUDY CONFIGURATION ----------
+// ---------- i18n SYSTEM ----------
+const LangContext = createContext("en");
+function useLang() { return useContext(LangContext); }
 
-const PHISHING_SCENARIOS = [
-  {
-    id: "S1",
-    pair: "brand",
-    isPhishing: true,
-    title: "PayPal Login",
-    domain: "paypa1-secure.com",
-    description: "A page that looks like the PayPal login, asking for email and password.",
-    imageLabel: "PayPal",
-    category: "Brand Impersonation",
-    signals: ["brand_lookalike:paypal", "credential_intent"],
-    pageContent: { heading: "PayPal", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: false },
-    interventions: {
-      A: {
-        headline: "⚠️ Deceptive Site Ahead",
-        body: "This site may trick you into doing something dangerous like installing software or revealing personal information.",
-        reasons: null, skill: null,
-      },
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          'The domain "paypa1-secure.com" closely mimics "paypal.com" (uses numeral "1" instead of letter "l")',
-          "This page contains a login form requesting your credentials",
-          "The domain was recently registered and is not associated with PayPal",
-        ],
-        skill: null,
-      },
-      C: {
-        headline: "🛡️ Coach: Spotting Brand Lookalikes",
-        body: null, reasons: null,
-        skill: {
-          name: "Spotting Brand Lookalikes",
-          lesson: 'Attackers often register domains that look almost identical to real brands — swapping letters for numbers, adding hyphens, or inserting extra words. This page uses "paypa1-secure.com" where the "l" in PayPal has been replaced with a "1".',
-          action: "Before entering login details anywhere, always check the address bar carefully. Does the domain match exactly? If unsure, open a new tab and type the real website address directly.",
-          tip: "This skill transfers to any brand — banks, shops, social media. Always verify the domain before entering credentials.",
-        },
-      },
-    },
-    comprehension: {
-      question: "Why was this page flagged as suspicious?",
-      options: [
-        "The page was loading slowly and had broken images",
-        "The domain name closely mimics a real brand by swapping similar-looking characters",
-        "The page was using an outdated version of HTML",
-      ],
-      correct: 1,
-    },
+const UI = {
+  en: {
+    langPickerTitle: "Choose Your Language",
+    langPickerSub: "This study is available in multiple languages. Please select your preferred language.",
+    honoursBadge: "Honours Research Study",
+    studyTitle: "Safe Interceptor: Warning Design Evaluation",
+    consentIntro: "Thank you for taking part in this study. You will be shown 8 simulated web scenarios, each with a security warning. For each one, you will decide whether to proceed or leave the page, answer a short question, and rate your confidence. The study takes approximately 15\u201320 minutes.",
+    keyInfo: "Key information:",
+    keyPoints: [
+      "All scenarios are simulated \u2014 no real websites are involved",
+      "Your responses are anonymous and identified only by a random code",
+      "You may withdraw at any time by closing the browser tab",
+      "Data will be used solely for academic research purposes",
+      "At the end, your results will be submitted automatically",
+    ],
+    consentCheck: "I understand the above information and consent to participate in this study",
+    continueBtn: "Continue \u2192",
+    aboutYou: "About You",
+    ageLabel: "Age range",
+    genderLabel: "Gender",
+    genderOpts: ["Male", "Female", "Non-binary", "Prefer not to say"],
+    techConfLabel: (v) => `How confident are you with technology? (${v}/5)`,
+    notConf: "Not confident",
+    veryConf: "Very confident",
+    phishExpLabel: "Have you ever fallen for a phishing attempt?",
+    phishOpts: ["Yes", "No", "Unsure"],
+    startStudy: "Start Study \u2192",
+    scenarioOf: (i, t) => `Scenario ${i} of ${t}`,
+    scenarioInstruction: "Imagine you are going about your normal day online. You have arrived at the page shown below \u2014 it might be something you intended to visit, or something you reached via a link. A security warning has appeared. Look at both the page and the warning, then choose what you would do.",
+    leaveBtn: "\u2190 Leave this page",
+    continueToSite: "Continue to site",
+    quickQuestion: "Quick Question",
+    nextBtn: "Next \u2192",
+    confTitle: "Confidence Rating",
+    confQuestion: "How confident are you that you made the right decision on this scenario?",
+    notConfident: "Not confident",
+    veryConfident: "Very confident",
+    nextScenario: "Next Scenario \u2192",
+    finishScenarios: "Finish Scenarios \u2192",
+    finalQTitle: "Final Questions",
+    finalQSub: "You saw three different types of security warnings during the study. Please rate each one.",
+    condA: { label: "Condition A \u2014 Generic Warning", desc: 'A simple red warning with no specific reasons \u2014 just "this site may be dangerous".' },
+    condB: { label: "Condition B \u2014 Warning + Reasons", desc: "An amber warning listing specific reasons why the page was flagged." },
+    condC: { label: "Condition C \u2014 Skill-Based Coach", desc: "A blue coaching panel that explained the attack technique, recommended an action, and gave a transferable tip." },
+    annoyanceQ: (v) => `How annoying or disruptive did you find this warning? (${v}/5)`,
+    notAnnoying: "Not annoying",
+    veryAnnoying: "Very annoying",
+    prefLabel: "Which warning style would you most want in your real browser?",
+    prefOpts: ["A \u2014 Generic Warning", "B \u2014 Warning + Reasons", "C \u2014 Skill-Based Coach", "None of them"],
+    whyLabel: "Why? (Optional \u2014 a sentence or two is fine)",
+    whyPlaceholder: "Tell us briefly why you preferred that option...",
+    completeStudy: "Complete Study \u2192",
+    thankYou: "Thank You!",
+    submitting: "Sending your results automatically...",
+    successTitle: "Your results have been submitted successfully",
+    successSub: "No further action needed. You may close this tab. Thank you for participating!",
+    failedTitle: "Automatic submission could not connect. Please send your results manually:",
+    sendEmail: "Send Results via Email",
+    emailOpened: "Email opened \u2014 please hit Send in your email app.",
+    downloadPrompt: "Need a copy of your data? Download it here",
+    downloadCSV: "Download CSV",
+    downloadJSON: "Download JSON",
+    flaggedReasons: "Safe Interceptor flagged this page for the following reasons:",
+    recommendedAction: "\u2705 Recommended Action",
   },
-  {
-    id: "S2",
-    pair: "brand",
-    isPhishing: true,
-    title: "Microsoft 365 Login",
-    domain: "microsoftt-login.com",
-    description: "A page that looks like Microsoft 365 sign-in, requesting corporate email and password.",
-    imageLabel: "Microsoft",
-    category: "Brand Impersonation",
-    signals: ["brand_lookalike:microsoft", "credential_intent"],
-    pageContent: { heading: "Microsoft", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: false },
-    interventions: {
-      A: {
-        headline: "⚠️ Deceptive Site Ahead",
-        body: "This site may trick you into doing something dangerous like installing software or revealing personal information.",
-        reasons: null, skill: null,
-      },
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          'The domain "microsoftt-login.com" is not an official Microsoft domain (note the double "t")',
-          "The page is requesting corporate email credentials",
-          "Official Microsoft sign-in only happens on microsoft.com, live.com, or office.com domains",
-        ],
-        skill: null,
-      },
-      C: {
-        headline: "🛡️ Coach: Verifying Official Domains",
-        body: null, reasons: null,
-        skill: {
-          name: "Verifying Official Domains",
-          lesson: 'Legitimate services have a small set of official domains. Microsoft only uses microsoft.com, live.com, and office.com for sign-in. This page uses "microsoftt-login.com" — an unofficial domain with a subtle extra "t" designed to look genuine at a glance.',
-          action: "When asked to log in, check whether the domain is one you recognise as official. If you are unsure, search for the service name and navigate to it directly rather than following a link.",
-          tip: "Most major services publish their official domains. Bookmark your important login pages so you always start from the genuine site.",
-        },
-      },
-    },
-    comprehension: {
-      question: "What is the safest action if you are unsure whether a login page is real?",
-      options: [
-        "Enter a fake password first to test if the site responds correctly",
-        "Navigate directly to the official website by typing the address yourself or using a bookmark",
-        "Check if the page has a professional-looking design with a company logo",
-      ],
-      correct: 1,
-    },
+  pl: {
+    langPickerTitle: "Wybierz j\u0119zyk",
+    langPickerSub: "To badanie jest dost\u0119pne w kilku j\u0119zykach. Wybierz preferowany j\u0119zyk.",
+    honoursBadge: "Badanie naukowe",
+    studyTitle: "Safe Interceptor: Ocena projekt\u00f3w ostrze\u017ce\u0144",
+    consentIntro: "Dzi\u0119kujemy za udzia\u0142 w tym badaniu. Zostan\u0105 Ci przedstawione 8 symulowanych scenariuszy internetowych, ka\u017cdy z ostrze\u017ceniem bezpiecze\u0144stwa. Dla ka\u017cdego zdecydujesz, czy kontynuowa\u0107 czy opu\u015bci\u0107 stron\u0119, odpowiesz na kr\u00f3tkie pytanie i ocenisz swoj\u0105 pewno\u015b\u0107. Badanie trwa oko\u0142o 15\u201320 minut.",
+    keyInfo: "Kluczowe informacje:",
+    keyPoints: [
+      "Wszystkie scenariusze s\u0105 symulowane \u2014 nie s\u0105 u\u017cywane prawdziwe strony internetowe",
+      "Twoje odpowiedzi s\u0105 anonimowe i identyfikowane tylko kodem losowym",
+      "Mo\u017cesz wycofa\u0107 si\u0119 w dowolnym momencie, zamykaj\u0105c kart\u0119 przegl\u0105darki",
+      "Dane b\u0119d\u0105 wykorzystane wy\u0142\u0105cznie do cel\u00f3w badawczych",
+      "Na ko\u0144cu wyniki zostan\u0105 przes\u0142ane automatycznie",
+    ],
+    consentCheck: "Rozumiem powy\u017csze informacje i wyra\u017cam zgod\u0119 na udzia\u0142 w tym badaniu",
+    continueBtn: "Dalej \u2192",
+    aboutYou: "O Tobie",
+    ageLabel: "Przedzia\u0142 wiekowy",
+    genderLabel: "P\u0142e\u0107",
+    genderOpts: ["M\u0119\u017cczyzna", "Kobieta", "Niebinarnie", "Wol\u0119 nie m\u00f3wi\u0107"],
+    techConfLabel: (v) => `Jak pewnie czujesz si\u0119 z technologi\u0105? (${v}/5)`,
+    notConf: "Niepewnie",
+    veryConf: "Bardzo pewnie",
+    phishExpLabel: "Czy kiedykolwiek pad\u0142e\u015b/pad\u0142a\u015b ofiar\u0105 phishingu?",
+    phishOpts: ["Tak", "Nie", "Nie wiem"],
+    startStudy: "Rozpocznij badanie \u2192",
+    scenarioOf: (i, t) => `Scenariusz ${i} z ${t}`,
+    scenarioInstruction: "Wyobra\u017a sobie, \u017ce sp\u0119dzasz zwyk\u0142y dzie\u0144 w internecie. Dotar\u0142e\u015b/dotar\u0142a\u015b na poni\u017csz\u0105 stron\u0119 \u2014 mo\u017ce to by\u0107 strona, kt\u00f3r\u0105 chcia\u0142e\u015b/chcia\u0142a\u015b odwiedzi\u0107, lub taka, na kt\u00f3r\u0105 trafi\u0142e\u015b/trafi\u0142a\u015b przez link. Pojawi\u0142o si\u0119 ostrze\u017cenie bezpiecze\u0144stwa. Przyjrzyj si\u0119 stronie i ostrze\u017ceniu, a nast\u0119pnie wybierz, co zrobisz.",
+    leaveBtn: "\u2190 Opu\u015b\u0107 stron\u0119",
+    continueToSite: "Przejd\u017a do strony",
+    quickQuestion: "Szybkie pytanie",
+    nextBtn: "Dalej \u2192",
+    confTitle: "Ocena pewno\u015bci",
+    confQuestion: "Jak bardzo jeste\u015b pewny/pewna, \u017ce podj\u0105\u0142e\u015b/podj\u0119\u0142a\u015b w\u0142a\u015bciw\u0105 decyzj\u0119?",
+    notConfident: "Niepewnie",
+    veryConfident: "Bardzo pewnie",
+    nextScenario: "Nast\u0119pny scenariusz \u2192",
+    finishScenarios: "Zako\u0144cz scenariusze \u2192",
+    finalQTitle: "Ostatnie pytania",
+    finalQSub: "Podczas badania widzia\u0142e\u015b/widzia\u0142a\u015b trzy r\u00f3\u017cne typy ostrze\u017ce\u0144. Oce\u0144 ka\u017cdy z nich.",
+    condA: { label: "Warunek A \u2014 Og\u00f3lne ostrze\u017cenie", desc: 'Proste czerwone ostrze\u017cenie bez konkretnych powod\u00f3w \u2014 tylko \u201eta strona mo\u017ce by\u0107 niebezpieczna\u201d.' },
+    condB: { label: "Warunek B \u2014 Ostrze\u017cenie z powodami", desc: "Pomara\u0144czowe ostrze\u017cenie z list\u0105 konkretnych powod\u00f3w, dla kt\u00f3rych strona zosta\u0142a oznaczona." },
+    condC: { label: "Warunek C \u2014 Coach umiej\u0119tno\u015bci", desc: "Niebieski panel coachingowy, kt\u00f3ry wyja\u015bni\u0142 technik\u0119 ataku, zaleci\u0142 dzia\u0142anie i da\u0142 uniwersaln\u0105 wskaz\u00f3wk\u0119." },
+    annoyanceQ: (v) => `Jak irytuj\u0105ce lub przeszkadzaj\u0105ce by\u0142o to ostrze\u017cenie? (${v}/5)`,
+    notAnnoying: "Nie irytuj\u0105ce",
+    veryAnnoying: "Bardzo irytuj\u0105ce",
+    prefLabel: "Kt\u00f3ry styl ostrze\u017cenia chcia\u0142by\u015b/chcia\u0142aby\u015b mie\u0107 w swojej przegl\u0105darce?",
+    prefOpts: ["A \u2014 Og\u00f3lne ostrze\u017cenie", "B \u2014 Ostrze\u017cenie z powodami", "C \u2014 Coach umiej\u0119tno\u015bci", "\u017baden z nich"],
+    whyLabel: "Dlaczego? (Opcjonalnie \u2014 wystarczy jedno lub dwa zdania)",
+    whyPlaceholder: "Powiedz kr\u00f3tko, dlaczego wybra\u0142e\u015b/wybra\u0142a\u015b t\u0119 opcj\u0119...",
+    completeStudy: "Zako\u0144cz badanie \u2192",
+    thankYou: "Dzi\u0119kujemy!",
+    submitting: "Wysy\u0142anie wynik\u00f3w...",
+    successTitle: "Twoje wyniki zosta\u0142y przes\u0142ane pomy\u015blnie",
+    successSub: "Nie musisz nic wi\u0119cej robi\u0107. Mo\u017cesz zamkn\u0105\u0107 t\u0119 kart\u0119. Dzi\u0119kujemy za udzia\u0142!",
+    failedTitle: "Automatyczne wysy\u0142anie nie powiod\u0142o si\u0119. Wy\u015blij wyniki r\u0119cznie:",
+    sendEmail: "Wy\u015blij wyniki e-mailem",
+    emailOpened: "E-mail otwarty \u2014 kliknij Wy\u015blij w swojej aplikacji pocztowej.",
+    downloadPrompt: "Potrzebujesz kopii danych? Pobierz tutaj",
+    downloadCSV: "Pobierz CSV",
+    downloadJSON: "Pobierz JSON",
+    flaggedReasons: "Safe Interceptor oznaczy\u0142 t\u0119 stron\u0119 z nast\u0119puj\u0105cych powod\u00f3w:",
+    recommendedAction: "\u2705 Zalecane dzia\u0142anie",
   },
-  {
-    id: "S3",
-    pair: "urgency",
-    isPhishing: true,
-    title: "Bank Account Suspended",
-    domain: "secure-verify-bank.com",
-    description: "A page warning that your bank account has been suspended and requires immediate verification.",
-    imageLabel: "Bank",
-    category: "Urgency Manipulation",
-    signals: ["urgency_language", "credential_intent", "suspicious_domain"],
-    pageContent: { heading: "SecureBank", subtitle: "⚠️ Your account has been suspended. Verify your identity immediately to restore access.", field1: "Account number", field2: "Password", button: "Verify Now", isHTTP: false },
-    interventions: {
-      A: {
-        headline: "⚠️ Deceptive Site Ahead",
-        body: "This site may trick you into doing something dangerous like installing software or revealing personal information.",
-        reasons: null, skill: null,
-      },
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          'The page uses urgent language: "account suspended", "verify immediately"',
-          "The domain is not associated with any known bank",
-          "The page is requesting sensitive banking credentials",
-        ],
-        skill: null,
-      },
-      C: {
-        headline: "🛡️ Coach: Recognising Urgency Traps",
-        body: null, reasons: null,
-        skill: {
-          name: "Recognising Urgency Traps",
-          lesson: "Attackers create panic to override your careful thinking. Phrases like \"account suspended\", \"verify immediately\", or \"action required within 24 hours\" are designed to make you act before you think. Real banks rarely use this kind of pressure in web pages.",
-          action: "When you see urgent security messages, pause. Do not click any links or enter any details. Instead, contact your bank directly using the phone number on the back of your card or their official app.",
-          tip: "This technique is used across many scam types — fake deliveries, tax notices, tech support alerts. The urgency is always the clue.",
-        },
-      },
-    },
-    comprehension: {
-      question: "Why do phishing pages often use urgent language?",
-      options: [
-        "Because they are legally required to warn users about security issues",
-        "To pressure you into acting quickly before you have time to think critically",
-        "Because urgent pages load faster in web browsers",
-      ],
-      correct: 1,
-    },
+  it: {
+    langPickerTitle: "Scegli la lingua",
+    langPickerSub: "Questo studio \u00e8 disponibile in pi\u00f9 lingue. Seleziona la tua lingua preferita.",
+    honoursBadge: "Studio di ricerca accademica",
+    studyTitle: "Safe Interceptor: Valutazione del design degli avvisi",
+    consentIntro: "Grazie per aver partecipato a questo studio. Ti verranno mostrati 8 scenari web simulati, ciascuno con un avviso di sicurezza. Per ognuno, deciderai se procedere o lasciare la pagina, risponderai a una breve domanda e valuterai la tua sicurezza. Lo studio richiede circa 15\u201320 minuti.",
+    keyInfo: "Informazioni chiave:",
+    keyPoints: [
+      "Tutti gli scenari sono simulati \u2014 non sono coinvolti siti web reali",
+      "Le tue risposte sono anonime e identificate solo da un codice casuale",
+      "Puoi ritirarti in qualsiasi momento chiudendo la scheda del browser",
+      "I dati saranno utilizzati esclusivamente per scopi di ricerca accademica",
+      "Alla fine, i tuoi risultati verranno inviati automaticamente",
+    ],
+    consentCheck: "Comprendo le informazioni sopra riportate e acconsento a partecipare a questo studio",
+    continueBtn: "Continua \u2192",
+    aboutYou: "Informazioni su di te",
+    ageLabel: "Fascia d\u2019et\u00e0",
+    genderLabel: "Genere",
+    genderOpts: ["Uomo", "Donna", "Non binario", "Preferisco non dire"],
+    techConfLabel: (v) => `Quanto ti senti sicuro/a con la tecnologia? (${v}/5)`,
+    notConf: "Per niente",
+    veryConf: "Molto sicuro/a",
+    phishExpLabel: "Sei mai stato/a vittima di un tentativo di phishing?",
+    phishOpts: ["S\u00ec", "No", "Non so"],
+    startStudy: "Inizia lo studio \u2192",
+    scenarioOf: (i, t) => `Scenario ${i} di ${t}`,
+    scenarioInstruction: "Immagina di navigare normalmente in internet. Sei arrivato/a sulla pagina mostrata qui sotto \u2014 potrebbe essere qualcosa che intendevi visitare o qualcosa che hai raggiunto tramite un link. \u00c8 apparso un avviso di sicurezza. Esamina sia la pagina che l\u2019avviso, poi scegli cosa faresti.",
+    leaveBtn: "\u2190 Lascia la pagina",
+    continueToSite: "Continua al sito",
+    quickQuestion: "Domanda rapida",
+    nextBtn: "Avanti \u2192",
+    confTitle: "Valutazione della sicurezza",
+    confQuestion: "Quanto sei sicuro/a di aver preso la decisione giusta in questo scenario?",
+    notConfident: "Per niente",
+    veryConfident: "Molto sicuro/a",
+    nextScenario: "Prossimo scenario \u2192",
+    finishScenarios: "Completa gli scenari \u2192",
+    finalQTitle: "Domande finali",
+    finalQSub: "Durante lo studio hai visto tre diversi tipi di avvisi di sicurezza. Valuta ciascuno di essi.",
+    condA: { label: "Condizione A \u2014 Avviso generico", desc: 'Un semplice avviso rosso senza motivi specifici \u2014 solo "questo sito potrebbe essere pericoloso".' },
+    condB: { label: "Condizione B \u2014 Avviso con motivazioni", desc: "Un avviso arancione che elenca i motivi specifici per cui la pagina \u00e8 stata segnalata." },
+    condC: { label: "Condizione C \u2014 Coach di competenze", desc: "Un pannello di coaching blu che spiega la tecnica di attacco, raccomanda un\u2019azione e fornisce un consiglio trasferibile." },
+    annoyanceQ: (v) => `Quanto hai trovato fastidioso o invadente questo avviso? (${v}/5)`,
+    notAnnoying: "Per niente",
+    veryAnnoying: "Molto fastidioso",
+    prefLabel: "Quale stile di avviso vorresti nel tuo browser?",
+    prefOpts: ["A \u2014 Avviso generico", "B \u2014 Avviso con motivazioni", "C \u2014 Coach di competenze", "Nessuno di questi"],
+    whyLabel: "Perch\u00e9? (Facoltativo \u2014 bastano una o due frasi)",
+    whyPlaceholder: "Dicci brevemente perch\u00e9 hai preferito quell\u2019opzione...",
+    completeStudy: "Completa lo studio \u2192",
+    thankYou: "Grazie!",
+    submitting: "Invio dei risultati in corso...",
+    successTitle: "I tuoi risultati sono stati inviati con successo",
+    successSub: "Non devi fare altro. Puoi chiudere questa scheda. Grazie per aver partecipato!",
+    failedTitle: "L\u2019invio automatico non \u00e8 riuscito. Invia i risultati manualmente:",
+    sendEmail: "Invia risultati via email",
+    emailOpened: "Email aperta \u2014 premi Invia nella tua app di posta.",
+    downloadPrompt: "Hai bisogno di una copia dei tuoi dati? Scaricali qui",
+    downloadCSV: "Scarica CSV",
+    downloadJSON: "Scarica JSON",
+    flaggedReasons: "Safe Interceptor ha segnalato questa pagina per i seguenti motivi:",
+    recommendedAction: "\u2705 Azione consigliata",
   },
-  {
-    id: "S4",
-    pair: "urgency",
-    isPhishing: true,
-    title: "Delivery Payment Required",
-    domain: "parcel-redelivery-fee.com",
-    description: "A page claiming your parcel could not be delivered and a small payment is needed to rearrange delivery.",
-    imageLabel: "Delivery",
-    category: "Urgency Manipulation",
-    signals: ["urgency_language", "payment_intent", "suspicious_domain"],
-    pageContent: { heading: "QuickPost", subtitle: "📦 Delivery attempt failed. A fee of £1.50 is required to rearrange delivery within 24 hours.", field1: "Card number", field2: "CVV", button: "Pay £1.50", isHTTP: false },
-    interventions: {
-      A: {
-        headline: "⚠️ Deceptive Site Ahead",
-        body: "This site may trick you into doing something dangerous like installing software or revealing personal information.",
-        reasons: null, skill: null,
-      },
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          'The page uses urgency: "delivery attempt failed", "pay within 24 hours"',
-          "The domain is not associated with any known delivery service",
-          "The page is requesting payment card details for a small fee — a common phishing tactic",
-        ],
-        skill: null,
-      },
-      C: {
-        headline: "🛡️ Coach: Spotting Fake Payment Requests",
-        body: null, reasons: null,
-        skill: {
-          name: "Spotting Fake Payment Requests",
-          lesson: "Small unexpected fees are a common lure. Attackers know that a £1.50 \"redelivery fee\" feels low-risk, so people enter card details without thinking. But the goal is not the fee — it is your full card number. Real delivery services do not ask for payment through random websites.",
-          action: "If you receive a delivery notification asking for payment, go directly to the delivery company's official website or app using their tracking number. Never enter card details on a page you reached through a link in a message.",
-          tip: "This pattern applies to any unexpected small payment request — parking fines, subscription renewals, tax refunds. Always verify through official channels.",
-        },
-      },
-    },
-    comprehension: {
-      question: "What is the real goal of a fake delivery payment page asking for a £1.50 fee?",
-      options: [
-        "To collect the £1.50 redelivery fee from as many people as possible",
-        "To capture your full payment card details for fraudulent use",
-        "To test whether your email address is active",
-      ],
-      correct: 1,
-    },
-  },
-  {
-    id: "S5",
-    pair: "technical",
-    isPhishing: true,
-    title: "Amazon Lookalike (Punycode)",
-    domain: "аmazon.com (Cyrillic 'а')",
-    description: "A page that appears to be amazon.com but uses a Cyrillic character that looks identical to the Latin 'a'.",
-    imageLabel: "Amazon",
-    category: "Technical Deception",
-    signals: ["punycode_domain", "credential_intent", "brand_lookalike:amazon"],
-    pageContent: { heading: "amazon", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: false },
-    interventions: {
-      A: {
-        headline: "⚠️ Deceptive Site Ahead",
-        body: "This site may trick you into doing something dangerous like installing software or revealing personal information.",
-        reasons: null, skill: null,
-      },
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          "The domain uses special characters (punycode) that look identical to normal letters but are actually different",
-          "The real address of this page is xn--mazon-wqa.com — not amazon.com",
-          "The page is requesting your Amazon login credentials",
-        ],
-        skill: null,
-      },
-      C: {
-        headline: "🛡️ Coach: Understanding Hidden Characters",
-        body: null, reasons: null,
-        skill: {
-          name: "Understanding Hidden Characters",
-          lesson: "Some alphabets have letters that look identical to English ones but are technically different characters. Attackers exploit this by registering domains like \"аmazon.com\" where the \"а\" is actually a Cyrillic character. Your browser sees it as a completely different website (xn--mazon-wqa.com), but your eyes see \"amazon.com\".",
-          action: "If a login page appears unexpectedly, look at the address bar for any unusual encoding. Modern browsers often show the punycode version (starting with xn--) for suspicious domains. When in doubt, type the website address yourself.",
-          tip: "This attack works because humans read shapes, not character codes. Bookmarking important sites is one of the most effective defences against this technique.",
-        },
-      },
-    },
-    comprehension: {
-      question: "What is punycode in the context of web security?",
-      options: [
-        "A type of encryption used to protect passwords on login forms",
-        "A way of encoding special characters in domain names, which attackers can exploit to create convincing fake addresses",
-        "A programming language used to build phishing websites",
-      ],
-      correct: 1,
-    },
-  },
-  {
-    id: "S6",
-    pair: "technical",
-    isPhishing: true,
-    title: "Insecure Google Sign-In",
-    domain: "http://google-signin.net (HTTP, not HTTPS)",
-    description: "A page mimicking Google sign-in but served over an unencrypted HTTP connection.",
-    imageLabel: "Google",
-    category: "Technical Deception",
-    signals: ["insecure_connection", "credential_intent", "brand_lookalike:google"],
-    pageContent: { heading: "Google", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: true },
-    interventions: {
-      A: {
-        headline: "⚠️ Deceptive Site Ahead",
-        body: "This site may trick you into doing something dangerous like installing software or revealing personal information.",
-        reasons: null, skill: null,
-      },
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          "This page uses HTTP (not HTTPS) — your data is sent without encryption",
-          "The domain google-signin.net is not an official Google domain",
-          "The page is requesting your Google account credentials on an insecure connection",
-        ],
-        skill: null,
-      },
-      C: {
-        headline: "🛡️ Coach: Checking Connection Security",
-        body: null, reasons: null,
-        skill: {
-          name: "Checking Connection Security",
-          lesson: "Every legitimate login page uses HTTPS — shown by a padlock icon and \"https://\" in the address bar. This page uses plain HTTP, which means anything you type (including passwords) is sent in plain text that anyone on the network could intercept. No real service would ask for your password over an unencrypted connection.",
-          action: "Before entering any password, check for the padlock icon in your browser's address bar. If you see \"Not secure\" or the address starts with \"http://\" (without the 's'), do not enter any personal information.",
-          tip: "HTTPS alone does not guarantee a site is legitimate — attackers can get certificates too. But the absence of HTTPS on a login page is always a red flag.",
-        },
-      },
-    },
-    comprehension: {
-      question: "Why is it dangerous to enter a password on a page using HTTP instead of HTTPS?",
-      options: [
-        "HTTP pages always contain viruses that infect your computer",
-        "Your password is sent without encryption, meaning it could be intercepted by anyone on the network",
-        "HTTP pages cannot display login forms correctly, so your password might be saved wrong",
-      ],
-      correct: 1,
-    },
-  },
-];
+};
 
-// ---------- LEGITIMATE (FALSE-POSITIVE) SCENARIOS ----------
-const LEGITIMATE_SCENARIOS = [
-  {
-    id: "L1",
-    pair: "legitimate",
-    isPhishing: false,
-    title: "University Library Portal",
-    domain: "library.staffs.ac.uk",
-    description: "Your university's library portal, which you use regularly to access research databases and e-books.",
-    imageLabel: "University",
-    category: "False Positive",
-    signals: [],
-    pageContent: {
-      heading: "Staffordshire University Library",
-      subtitle: "Sign in with your university credentials to access databases, journals, and e-books.",
-      field1: "University email",
-      field2: "Password",
-      button: "Sign In",
-      isHTTP: false,
-    },
-    interventions: {
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          "The domain uses a subdomain structure (library.staffs.ac.uk) which can sometimes be used by attackers",
-          "The page contains a login form requesting your credentials",
-          "This site does not appear on common safe-site lists",
-        ],
-        skill: null,
-      },
-    },
-    comprehension: {
-      question: "What should you consider when a security tool flags a website you regularly use and trust?",
-      options: [
-        "Always obey the warning — security tools are never wrong",
-        "Ignore all future warnings since this one was wrong",
-        "Verify the URL matches what you expect, and if it does, the tool may have made a false-positive error",
-      ],
-      correct: 2,
-    },
-  },
-  {
-    id: "L2",
-    pair: "legitimate",
-    isPhishing: false,
-    title: "Stripe Checkout",
-    domain: "checkout.stripe.com",
-    description: "A Stripe-powered checkout page for an online shop where you are completing a purchase.",
-    imageLabel: "Stripe",
-    category: "False Positive",
-    signals: [],
-    pageContent: {
-      heading: "Stripe",
-      subtitle: "Complete your payment securely. Your order total: £24.99.",
-      field1: "Card number",
-      field2: "CVC",
-      button: "Pay £24.99",
-      isHTTP: false,
-    },
-    interventions: {
-      B: {
-        headline: "⚠️ Possible Phishing Detected",
-        body: "Safe Interceptor flagged this page for the following reasons:",
-        reasons: [
-          "The page is requesting payment card details",
-          "The domain (checkout.stripe.com) uses a subdomain that could be spoofed",
-          "Payment pages are commonly targeted by phishing attacks",
-        ],
-        skill: null,
-      },
-    },
-    comprehension: {
-      question: "How can you tell the difference between a legitimate payment page and a phishing page?",
-      options: [
-        "Legitimate payment pages always have a green background",
-        "Check that the domain exactly matches the known payment provider (e.g. stripe.com) and the connection is HTTPS",
-        "Real payment pages never ask for your CVV number",
-      ],
-      correct: 1,
-    },
-  },
-];
+// ---------- SCENARIO CONTENT (per language) ----------
 
-// Latin square counterbalancing for the 6 phishing scenarios
+function getScenarios(lang) {
+  const S = {
+    en: {
+      phishing: [
+        {
+          id: "S1", pair: "brand", isPhishing: true, title: "PayPal Login", domain: "paypa1-secure.com",
+          imageLabel: "PayPal", category: "Brand Impersonation",
+          signals: ["brand_lookalike:paypal", "credential_intent"],
+          pageContent: { heading: "PayPal", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Deceptive Site Ahead", body: "This site may trick you into doing something dangerous like installing software or revealing personal information.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ['The domain "paypa1-secure.com" closely mimics "paypal.com" (uses numeral "1" instead of letter "l")', "This page contains a login form requesting your credentials", "The domain was recently registered and is not associated with PayPal"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Spotting Brand Lookalikes", body: null, reasons: null, skill: { name: "Spotting Brand Lookalikes", lesson: 'Attackers often register domains that look almost identical to real brands \u2014 swapping letters for numbers, adding hyphens, or inserting extra words. This page uses "paypa1-secure.com" where the "l" in PayPal has been replaced with a "1".', action: "Before entering login details anywhere, always check the address bar carefully. Does the domain match exactly? If unsure, open a new tab and type the real website address directly.", tip: "This skill transfers to any brand \u2014 banks, shops, social media. Always verify the domain before entering credentials." } },
+          },
+          comprehension: { question: "Why was this page flagged as suspicious?", options: ["The page was loading slowly and had broken images", "The domain name closely mimics a real brand by swapping similar-looking characters", "The page was using an outdated version of HTML"], correct: 1 },
+        },
+        {
+          id: "S2", pair: "brand", isPhishing: true, title: "Microsoft 365 Login", domain: "microsoftt-login.com",
+          imageLabel: "Microsoft", category: "Brand Impersonation",
+          signals: ["brand_lookalike:microsoft", "credential_intent"],
+          pageContent: { heading: "Microsoft", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Deceptive Site Ahead", body: "This site may trick you into doing something dangerous like installing software or revealing personal information.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ['The domain "microsoftt-login.com" is not an official Microsoft domain (note the double "t")', "The page is requesting corporate email credentials", "Official Microsoft sign-in only happens on microsoft.com, live.com, or office.com domains"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Verifying Official Domains", body: null, reasons: null, skill: { name: "Verifying Official Domains", lesson: 'Legitimate services have a small set of official domains. Microsoft only uses microsoft.com, live.com, and office.com for sign-in. This page uses "microsoftt-login.com" \u2014 an unofficial domain with a subtle extra "t" designed to look genuine at a glance.', action: "When asked to log in, check whether the domain is one you recognise as official. If you are unsure, search for the service name and navigate to it directly rather than following a link.", tip: "Most major services publish their official domains. Bookmark your important login pages so you always start from the genuine site." } },
+          },
+          comprehension: { question: "What is the safest action if you are unsure whether a login page is real?", options: ["Enter a fake password first to test if the site responds correctly", "Navigate directly to the official website by typing the address yourself or using a bookmark", "Check if the page has a professional-looking design with a company logo"], correct: 1 },
+        },
+        {
+          id: "S3", pair: "urgency", isPhishing: true, title: "Bank Account Suspended", domain: "secure-verify-bank.com",
+          imageLabel: "Bank", category: "Urgency Manipulation",
+          signals: ["urgency_language", "credential_intent", "suspicious_domain"],
+          pageContent: { heading: "SecureBank", subtitle: "\u26a0\ufe0f Your account has been suspended. Verify your identity immediately to restore access.", field1: "Account number", field2: "Password", button: "Verify Now", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Deceptive Site Ahead", body: "This site may trick you into doing something dangerous like installing software or revealing personal information.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ['The page uses urgent language: "account suspended", "verify immediately"', "The domain is not associated with any known bank", "The page is requesting sensitive banking credentials"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Recognising Urgency Traps", body: null, reasons: null, skill: { name: "Recognising Urgency Traps", lesson: 'Attackers create panic to override your careful thinking. Phrases like "account suspended", "verify immediately", or "action required within 24 hours" are designed to make you act before you think. Real banks rarely use this kind of pressure in web pages.', action: "When you see urgent security messages, pause. Do not click any links or enter any details. Instead, contact your bank directly using the phone number on the back of your card or their official app.", tip: "This technique is used across many scam types \u2014 fake deliveries, tax notices, tech support alerts. The urgency is always the clue." } },
+          },
+          comprehension: { question: "Why do phishing pages often use urgent language?", options: ["Because they are legally required to warn users about security issues", "To pressure you into acting quickly before you have time to think critically", "Because urgent pages load faster in web browsers"], correct: 1 },
+        },
+        {
+          id: "S4", pair: "urgency", isPhishing: true, title: "Delivery Payment Required", domain: "parcel-redelivery-fee.com",
+          imageLabel: "Delivery", category: "Urgency Manipulation",
+          signals: ["urgency_language", "payment_intent", "suspicious_domain"],
+          pageContent: { heading: "QuickPost", subtitle: "\ud83d\udce6 Delivery attempt failed. A fee of \u00a31.50 is required to rearrange delivery within 24 hours.", field1: "Card number", field2: "CVV", button: "Pay \u00a31.50", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Deceptive Site Ahead", body: "This site may trick you into doing something dangerous like installing software or revealing personal information.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ['The page uses urgency: "delivery attempt failed", "pay within 24 hours"', "The domain is not associated with any known delivery service", "The page is requesting payment card details for a small fee \u2014 a common phishing tactic"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Spotting Fake Payment Requests", body: null, reasons: null, skill: { name: "Spotting Fake Payment Requests", lesson: 'Small unexpected fees are a common lure. Attackers know that a \u00a31.50 "redelivery fee" feels low-risk, so people enter card details without thinking. But the goal is not the fee \u2014 it is your full card number. Real delivery services do not ask for payment through random websites.', action: "If you receive a delivery notification asking for payment, go directly to the delivery company\u2019s official website or app using their tracking number. Never enter card details on a page you reached through a link in a message.", tip: "This pattern applies to any unexpected small payment request \u2014 parking fines, subscription renewals, tax refunds. Always verify through official channels." } },
+          },
+          comprehension: { question: "What is the real goal of a fake delivery payment page asking for a \u00a31.50 fee?", options: ["To collect the \u00a31.50 redelivery fee from as many people as possible", "To capture your full payment card details for fraudulent use", "To test whether your email address is active"], correct: 1 },
+        },
+        {
+          id: "S5", pair: "technical", isPhishing: true, title: "Amazon Lookalike (Punycode)", domain: "\u0430mazon.com (Cyrillic '\u0430')",
+          imageLabel: "Amazon", category: "Technical Deception",
+          signals: ["punycode_domain", "credential_intent", "brand_lookalike:amazon"],
+          pageContent: { heading: "amazon", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Deceptive Site Ahead", body: "This site may trick you into doing something dangerous like installing software or revealing personal information.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ["The domain uses special characters (punycode) that look identical to normal letters but are actually different", "The real address of this page is xn--mazon-wqa.com \u2014 not amazon.com", "The page is requesting your Amazon login credentials"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Understanding Hidden Characters", body: null, reasons: null, skill: { name: "Understanding Hidden Characters", lesson: 'Some alphabets have letters that look identical to English ones but are technically different characters. Attackers exploit this by registering domains like "\u0430mazon.com" where the "\u0430" is actually a Cyrillic character. Your browser sees it as a completely different website (xn--mazon-wqa.com), but your eyes see "amazon.com".', action: "If a login page appears unexpectedly, look at the address bar for any unusual encoding. Modern browsers often show the punycode version (starting with xn--) for suspicious domains. When in doubt, type the website address yourself.", tip: "This attack works because humans read shapes, not character codes. Bookmarking important sites is one of the most effective defences against this technique." } },
+          },
+          comprehension: { question: "What is punycode in the context of web security?", options: ["A type of encryption used to protect passwords on login forms", "A way of encoding special characters in domain names, which attackers can exploit to create convincing fake addresses", "A programming language used to build phishing websites"], correct: 1 },
+        },
+        {
+          id: "S6", pair: "technical", isPhishing: true, title: "Insecure Google Sign-In", domain: "http://google-signin.net (HTTP, not HTTPS)",
+          imageLabel: "Google", category: "Technical Deception",
+          signals: ["insecure_connection", "credential_intent", "brand_lookalike:google"],
+          pageContent: { heading: "Google", subtitle: "Sign in to your account", field1: "Email or username", field2: "Password", button: "Sign In", isHTTP: true },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Deceptive Site Ahead", body: "This site may trick you into doing something dangerous like installing software or revealing personal information.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ["This page uses HTTP (not HTTPS) \u2014 your data is sent without encryption", "The domain google-signin.net is not an official Google domain", "The page is requesting your Google account credentials on an insecure connection"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Checking Connection Security", body: null, reasons: null, skill: { name: "Checking Connection Security", lesson: 'Every legitimate login page uses HTTPS \u2014 shown by a padlock icon and "https://" in the address bar. This page uses plain HTTP, which means anything you type (including passwords) is sent in plain text that anyone on the network could intercept. No real service would ask for your password over an unencrypted connection.', action: 'Before entering any password, check for the padlock icon in your browser\'s address bar. If you see "Not secure" or the address starts with "http://" (without the \'s\'), do not enter any personal information.', tip: "HTTPS alone does not guarantee a site is legitimate \u2014 attackers can get certificates too. But the absence of HTTPS on a login page is always a red flag." } },
+          },
+          comprehension: { question: "Why is it dangerous to enter a password on a page using HTTP instead of HTTPS?", options: ["HTTP pages always contain viruses that infect your computer", "Your password is sent without encryption, meaning it could be intercepted by anyone on the network", "HTTP pages cannot display login forms correctly, so your password might be saved wrong"], correct: 1 },
+        },
+      ],
+      legitimate: [
+        {
+          id: "L1", pair: "legitimate", isPhishing: false, title: "University Library Portal", domain: "library.staffs.ac.uk",
+          imageLabel: "University", category: "False Positive", signals: [],
+          pageContent: { heading: "Staffordshire University Library", subtitle: "Sign in with your university credentials to access databases, journals, and e-books.", field1: "University email", field2: "Password", button: "Sign In", isHTTP: false },
+          interventions: { B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ["The domain uses a subdomain structure (library.staffs.ac.uk) which can sometimes be used by attackers", "The page contains a login form requesting your credentials", "This site does not appear on common safe-site lists"], skill: null } },
+          comprehension: { question: "What should you consider when a security tool flags a website you regularly use and trust?", options: ["Always obey the warning \u2014 security tools are never wrong", "Ignore all future warnings since this one was wrong", "Verify the URL matches what you expect, and if it does, the tool may have made a false-positive error"], correct: 2 },
+        },
+        {
+          id: "L2", pair: "legitimate", isPhishing: false, title: "Stripe Checkout", domain: "checkout.stripe.com",
+          imageLabel: "Stripe", category: "False Positive", signals: [],
+          pageContent: { heading: "Stripe", subtitle: "Complete your payment securely. Your order total: \u00a324.99.", field1: "Card number", field2: "CVC", button: "Pay \u00a324.99", isHTTP: false },
+          interventions: { B: { headline: "\u26a0\ufe0f Possible Phishing Detected", body: null, reasons: ["The page is requesting payment card details", "The domain (checkout.stripe.com) uses a subdomain that could be spoofed", "Payment pages are commonly targeted by phishing attacks"], skill: null } },
+          comprehension: { question: "How can you tell the difference between a legitimate payment page and a phishing page?", options: ["Legitimate payment pages always have a green background", "Check that the domain exactly matches the known payment provider (e.g. stripe.com) and the connection is HTTPS", "Real payment pages never ask for your CVV number"], correct: 1 },
+        },
+      ],
+    },
+    pl: {
+      phishing: [
+        {
+          id: "S1", pair: "brand", isPhishing: true, title: "PayPal Login", domain: "paypa1-secure.com",
+          imageLabel: "PayPal", category: "Brand Impersonation",
+          signals: ["brand_lookalike:paypal", "credential_intent"],
+          pageContent: { heading: "PayPal", subtitle: "Zaloguj si\u0119 na swoje konto", field1: "E-mail lub nazwa u\u017cytkownika", field2: "Has\u0142o", button: "Zaloguj si\u0119", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Podejrzana strona", body: "Ta strona mo\u017ce pr\u00f3bowa\u0107 Ci\u0119 nak\u0142oni\u0107 do czego\u015b niebezpiecznego, np. instalacji oprogramowania lub ujawnienia danych osobowych.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ['Domena "paypa1-secure.com" bardzo przypomina "paypal.com" (cyfra "1" zamiast litery "l")', "Strona zawiera formularz logowania prosz\u0105cy o dane uwierzytelniaj\u0105ce", "Domena zosta\u0142a niedawno zarejestrowana i nie jest powi\u0105zana z PayPal"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Rozpoznawanie podr\u00f3bek marek", body: null, reasons: null, skill: { name: "Rozpoznawanie podr\u00f3bek marek", lesson: 'Atakuj\u0105cy cz\u0119sto rejestruj\u0105 domeny prawie identyczne z prawdziwymi markami \u2014 zamieniaj\u0105c litery na cyfry, dodaj\u0105c my\u015blniki lub dodatkowe s\u0142owa. Ta strona u\u017cywa "paypa1-secure.com", gdzie litera "l" w PayPal zosta\u0142a zast\u0105piona cyfr\u0105 "1".', action: "Zanim wpiszesz dane logowania, zawsze dok\u0142adnie sprawd\u017a pasek adresu. Czy domena dok\u0142adnie si\u0119 zgadza? Je\u015bli nie masz pewno\u015bci, otw\u00f3rz now\u0105 kart\u0119 i wpisz prawdziwy adres strony r\u0119cznie.", tip: "Ta umiej\u0119tno\u015b\u0107 przydaje si\u0119 wobec ka\u017cdej marki \u2014 bank\u00f3w, sklep\u00f3w, medi\u00f3w spo\u0142eczno\u015bciowych. Zawsze weryfikuj domen\u0119 przed wpisaniem danych." } },
+          },
+          comprehension: { question: "Dlaczego ta strona zosta\u0142a oznaczona jako podejrzana?", options: ["\u0141adowa\u0142a si\u0119 wolno i mia\u0142a uszkodzone obrazy", "Nazwa domeny bardzo przypomina prawdziw\u0105 mark\u0119, zamieniaj\u0105c podobne znaki", "Strona u\u017cywa\u0142a przestarza\u0142ej wersji HTML"], correct: 1 },
+        },
+        {
+          id: "S2", pair: "brand", isPhishing: true, title: "Microsoft 365 Login", domain: "microsoftt-login.com",
+          imageLabel: "Microsoft", category: "Brand Impersonation",
+          signals: ["brand_lookalike:microsoft", "credential_intent"],
+          pageContent: { heading: "Microsoft", subtitle: "Zaloguj si\u0119 na swoje konto", field1: "E-mail lub nazwa u\u017cytkownika", field2: "Has\u0142o", button: "Zaloguj si\u0119", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Podejrzana strona", body: "Ta strona mo\u017ce pr\u00f3bowa\u0107 Ci\u0119 nak\u0142oni\u0107 do czego\u015b niebezpiecznego, np. instalacji oprogramowania lub ujawnienia danych osobowych.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ['Domena "microsoftt-login.com" nie jest oficjaln\u0105 domen\u0105 Microsoft (zwr\u00f3\u0107 uwag\u0119 na podw\u00f3jne "t")', "Strona prosi o firmowe dane logowania", "Oficjalne logowanie Microsoft odbywa si\u0119 tylko na microsoft.com, live.com lub office.com"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Weryfikacja oficjalnych domen", body: null, reasons: null, skill: { name: "Weryfikacja oficjalnych domen", lesson: 'Legalne serwisy maj\u0105 niewielki zestaw oficjalnych domen. Microsoft u\u017cywa tylko microsoft.com, live.com i office.com do logowania. Ta strona u\u017cywa "microsoftt-login.com" \u2014 nieoficjalnej domeny z subtelnym dodatkowym "t".', action: "Gdy zostaniesz poproszony o zalogowanie, sprawd\u017a, czy domena jest t\u0105, kt\u00f3r\u0105 znasz jako oficjaln\u0105. Je\u015bli nie masz pewno\u015bci, wyszukaj nazw\u0119 us\u0142ugi i przejd\u017a do niej bezpo\u015brednio.", tip: "Wi\u0119kszo\u015b\u0107 du\u017cych serwis\u00f3w publikuje swoje oficjalne domeny. Dodaj wa\u017cne strony logowania do zak\u0142adek." } },
+          },
+          comprehension: { question: "Jaki jest najbezpieczniejszy spos\u00f3b post\u0119powania, gdy nie masz pewno\u015bci, czy strona logowania jest prawdziwa?", options: ["Wpisz najpierw fa\u0142szywe has\u0142o, aby sprawdzi\u0107 reakcj\u0119 strony", "Przejd\u017a bezpo\u015brednio na oficjaln\u0105 stron\u0119, wpisuj\u0105c adres r\u0119cznie lub u\u017cywaj\u0105c zak\u0142adki", "Sprawd\u017a, czy strona ma profesjonalny wygl\u0105d z logo firmy"], correct: 1 },
+        },
+        {
+          id: "S3", pair: "urgency", isPhishing: true, title: "Bank Account Suspended", domain: "secure-verify-bank.com",
+          imageLabel: "Bank", category: "Urgency Manipulation",
+          signals: ["urgency_language", "credential_intent", "suspicious_domain"],
+          pageContent: { heading: "SecureBank", subtitle: "\u26a0\ufe0f Twoje konto zosta\u0142o zawieszone. Natychmiast zweryfikuj swoj\u0105 to\u017csamo\u015b\u0107, aby przywr\u00f3ci\u0107 dost\u0119p.", field1: "Numer konta", field2: "Has\u0142o", button: "Zweryfikuj teraz", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Podejrzana strona", body: "Ta strona mo\u017ce pr\u00f3bowa\u0107 Ci\u0119 nak\u0142oni\u0107 do czego\u015b niebezpiecznego, np. instalacji oprogramowania lub ujawnienia danych osobowych.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ['Strona u\u017cywa pilnego j\u0119zyka: "konto zawieszone", "zweryfikuj natychmiast"', "Domena nie jest powi\u0105zana z \u017cadnym znanym bankiem", "Strona prosi o wra\u017cliwe dane bankowe"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Rozpoznawanie pu\u0142apek pilno\u015bci", body: null, reasons: null, skill: { name: "Rozpoznawanie pu\u0142apek pilno\u015bci", lesson: 'Atakuj\u0105cy tworz\u0105 poczucie paniki, aby wy\u0142\u0105czy\u0107 Twoje krytyczne my\u015blenie. Zwroty takie jak "konto zawieszone", "zweryfikuj natychmiast" maj\u0105 sprawi\u0107, \u017ceby\u015b dzia\u0142a\u0142/a zanim pomy\u015blisz. Prawdziwe banki rzadko u\u017cywaj\u0105 takiego nacisku.', action: "Gdy widzisz pilne komunikaty bezpiecze\u0144stwa, zatrzymaj si\u0119. Nie klikaj \u017cadnych link\u00f3w ani nie wpisuj danych. Skontaktuj si\u0119 z bankiem bezpo\u015brednio \u2014 numer telefonu znajdziesz z ty\u0142u karty.", tip: "Ta technika jest stosowana w wielu rodzajach oszustw \u2014 fa\u0142szywe przesy\u0142ki, powiadomienia podatkowe, alerty pomocy technicznej." } },
+          },
+          comprehension: { question: "Dlaczego strony phishingowe cz\u0119sto u\u017cywaj\u0105 pilnego j\u0119zyka?", options: ["Poniewa\u017c s\u0105 prawnie zobowi\u0105zane do ostrzegania u\u017cytkownik\u00f3w", "Aby wywr\u00f3ci\u0107 presj\u0119 i sk\u0142oni\u0107 do szybkiego dzia\u0142ania, zanim zd\u0105\u017cysz krytycznie pomy\u015ble\u0107", "Poniewa\u017c pilne strony \u0142aduj\u0105 si\u0119 szybciej"], correct: 1 },
+        },
+        {
+          id: "S4", pair: "urgency", isPhishing: true, title: "Delivery Payment Required", domain: "parcel-redelivery-fee.com",
+          imageLabel: "Delivery", category: "Urgency Manipulation",
+          signals: ["urgency_language", "payment_intent", "suspicious_domain"],
+          pageContent: { heading: "QuickPost", subtitle: "\ud83d\udce6 Pr\u00f3ba dostawy nie powiod\u0142a si\u0119. Op\u0142ata 7 z\u0142 jest wymagana do ponownej dostawy w ci\u0105gu 24 godzin.", field1: "Numer karty", field2: "CVV", button: "Zap\u0142a\u0107 7 z\u0142", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Podejrzana strona", body: "Ta strona mo\u017ce pr\u00f3bowa\u0107 Ci\u0119 nak\u0142oni\u0107 do czego\u015b niebezpiecznego, np. instalacji oprogramowania lub ujawnienia danych osobowych.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ['Strona u\u017cywa pilno\u015bci: "pr\u00f3ba dostawy nie powiod\u0142a si\u0119", "zap\u0142a\u0107 w ci\u0105gu 24 godzin"', "Domena nie jest powi\u0105zana z \u017cadn\u0105 znan\u0105 firm\u0105 kuriersk\u0105", "Strona prosi o dane karty p\u0142atniczej za niewielk\u0105 op\u0142at\u0119 \u2014 cz\u0119sta taktyka phishingowa"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Rozpoznawanie fa\u0142szywych \u017c\u0105da\u0144 p\u0142atno\u015bci", body: null, reasons: null, skill: { name: "Rozpoznawanie fa\u0142szywych \u017c\u0105da\u0144 p\u0142atno\u015bci", lesson: 'Ma\u0142e, nieoczekiwane op\u0142aty to cz\u0119sta przyneta. Atakuj\u0105cy wiedz\u0105, \u017ce 7 z\u0142 za "ponown\u0105 dostaw\u0119" wydaje si\u0119 niegro\u017ane \u2014 wi\u0119c ludzie wpisuj\u0105 dane karty bez zastanowienia. Ale celem nie jest op\u0142ata \u2014 celem jest Tw\u00f3j pe\u0142ny numer karty.', action: "Je\u015bli otrzymasz powiadomienie o dostawie z pro\u015bb\u0105 o p\u0142atno\u015b\u0107, przejd\u017a bezpo\u015brednio na oficjaln\u0105 stron\u0119 firmy kurierskiej. Nigdy nie wpisuj danych karty na stronie, na kt\u00f3r\u0105 trafi\u0142e\u015b/a\u015b przez link.", tip: "Ten schemat dotyczy ka\u017cdej nieoczekiwanej ma\u0142ej p\u0142atno\u015bci \u2014 mandaty parkingowe, odnowienia subskrypcji, zwroty podatk\u00f3w." } },
+          },
+          comprehension: { question: "Jaki jest prawdziwy cel fa\u0142szywej strony z op\u0142at\u0105 za dostaw\u0119?", options: ["Zebranie op\u0142aty za ponown\u0105 dostaw\u0119 od jak najwi\u0119kszej liczby os\u00f3b", "Przechwycenie pe\u0142nych danych karty p\u0142atniczej do oszustw", "Sprawdzenie, czy Tw\u00f3j adres e-mail jest aktywny"], correct: 1 },
+        },
+        {
+          id: "S5", pair: "technical", isPhishing: true, title: "Amazon Lookalike (Punycode)", domain: "\u0430mazon.com (Cyrillic '\u0430')",
+          imageLabel: "Amazon", category: "Technical Deception",
+          signals: ["punycode_domain", "credential_intent", "brand_lookalike:amazon"],
+          pageContent: { heading: "amazon", subtitle: "Zaloguj si\u0119 na swoje konto", field1: "E-mail lub nazwa u\u017cytkownika", field2: "Has\u0142o", button: "Zaloguj si\u0119", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Podejrzana strona", body: "Ta strona mo\u017ce pr\u00f3bowa\u0107 Ci\u0119 nak\u0142oni\u0107 do czego\u015b niebezpiecznego, np. instalacji oprogramowania lub ujawnienia danych osobowych.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ["Domena u\u017cywa specjalnych znak\u00f3w (punycode), kt\u00f3re wygl\u0105daj\u0105 identycznie jak normalne litery, ale s\u0105 inne", "Prawdziwy adres tej strony to xn--mazon-wqa.com \u2014 nie amazon.com", "Strona prosi o dane logowania do konta Amazon"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Ukryte znaki w adresach", body: null, reasons: null, skill: { name: "Ukryte znaki w adresach", lesson: 'Niekt\u00f3re alfabety maj\u0105 litery wygl\u0105daj\u0105ce identycznie jak angielskie, ale technicznie s\u0105 innymi znakami. Atakuj\u0105cy wykorzystuj\u0105 to, rejestruj\u0105c domeny takie jak "\u0430mazon.com", gdzie "\u0430" jest w rzeczywisto\u015bci znakiem cyrylicy. Przegl\u0105darka widzi zupe\u0142nie inn\u0105 stron\u0119 (xn--mazon-wqa.com), ale Twoje oczy widz\u0105 "amazon.com".', action: "Je\u015bli strona logowania pojawia si\u0119 niespodziewanie, sprawd\u017a pasek adresu pod k\u0105tem nietypowego kodowania. Nowoczesne przegl\u0105darki cz\u0119sto pokazuj\u0105 wersj\u0119 punycode (zaczynaj\u0105c\u0105 si\u0119 od xn--).", tip: "Ten atak dzia\u0142a, bo ludzie czytaj\u0105 kszta\u0142ty, a nie kody znak\u00f3w. Dodawanie stron do zak\u0142adek to jedna z najskuteczniejszych obron." } },
+          },
+          comprehension: { question: "Czym jest punycode w kontek\u015bcie bezpiecze\u0144stwa internetowego?", options: ["Rodzaj szyfrowania u\u017cywanego do ochrony hase\u0142", "Spos\u00f3b kodowania specjalnych znak\u00f3w w nazwach domen, kt\u00f3ry atakuj\u0105cy mog\u0105 wykorzysta\u0107 do tworzenia fa\u0142szywych adres\u00f3w", "J\u0119zyk programowania u\u017cywany do budowy stron phishingowych"], correct: 1 },
+        },
+        {
+          id: "S6", pair: "technical", isPhishing: true, title: "Insecure Google Sign-In", domain: "http://google-signin.net (HTTP, not HTTPS)",
+          imageLabel: "Google", category: "Technical Deception",
+          signals: ["insecure_connection", "credential_intent", "brand_lookalike:google"],
+          pageContent: { heading: "Google", subtitle: "Zaloguj si\u0119 na swoje konto", field1: "E-mail lub nazwa u\u017cytkownika", field2: "Has\u0142o", button: "Zaloguj si\u0119", isHTTP: true },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Podejrzana strona", body: "Ta strona mo\u017ce pr\u00f3bowa\u0107 Ci\u0119 nak\u0142oni\u0107 do czego\u015b niebezpiecznego, np. instalacji oprogramowania lub ujawnienia danych osobowych.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ["Ta strona u\u017cywa HTTP (nie HTTPS) \u2014 Twoje dane s\u0105 wysy\u0142ane bez szyfrowania", "Domena google-signin.net nie jest oficjaln\u0105 domen\u0105 Google", "Strona prosi o dane logowania Google przez niezabezpieczone po\u0142\u0105czenie"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Sprawdzanie bezpiecze\u0144stwa po\u0142\u0105czenia", body: null, reasons: null, skill: { name: "Sprawdzanie bezpiecze\u0144stwa po\u0142\u0105czenia", lesson: 'Ka\u017cda legalna strona logowania u\u017cywa HTTPS \u2014 oznaczone ikon\u0105 k\u0142\u00f3dki i "https://" w pasku adresu. Ta strona u\u017cywa zwyk\u0142ego HTTP, co oznacza, \u017ce wszystko, co wpiszesz (w tym has\u0142a), jest wysy\u0142ane tekstem jawnym.', action: 'Zanim wpiszesz has\u0142o, sprawd\u017a ikon\u0119 k\u0142\u00f3dki w pasku adresu przegl\u0105darki. Je\u015bli widzisz "Niezabezpieczone" lub adres zaczyna si\u0119 od "http://", nie wpisuj \u017cadnych danych.', tip: "Sam HTTPS nie gwarantuje, \u017ce strona jest legalna \u2014 atakuj\u0105cy te\u017c mog\u0105 uzyska\u0107 certyfikaty. Ale brak HTTPS na stronie logowania to zawsze sygna\u0142 ostrzegawczy." } },
+          },
+          comprehension: { question: "Dlaczego niebezpieczne jest wpisywanie has\u0142a na stronie u\u017cywaj\u0105cej HTTP zamiast HTTPS?", options: ["Strony HTTP zawsze zawieraj\u0105 wirusy", "Twoje has\u0142o jest wysy\u0142ane bez szyfrowania i mo\u017ce zosta\u0107 przechwycone przez ka\u017cdego w sieci", "Strony HTTP nie mog\u0105 poprawnie wy\u015bwietla\u0107 formularzy logowania"], correct: 1 },
+        },
+      ],
+      legitimate: [
+        {
+          id: "L1", pair: "legitimate", isPhishing: false, title: "University Library Portal", domain: "library.staffs.ac.uk",
+          imageLabel: "University", category: "False Positive", signals: [],
+          pageContent: { heading: "Biblioteka Uniwersytetu Staffordshire", subtitle: "Zaloguj si\u0119 danymi uczelnianymi, aby uzyska\u0107 dost\u0119p do baz danych, czasopism i e-book\u00f3w.", field1: "E-mail uczelniany", field2: "Has\u0142o", button: "Zaloguj si\u0119", isHTTP: false },
+          interventions: { B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ["Domena u\u017cywa struktury subdomeny (library.staffs.ac.uk), kt\u00f3ra bywa wykorzystywana przez atakuj\u0105cych", "Strona zawiera formularz logowania", "Ta strona nie pojawia si\u0119 na popularnych listach bezpiecznych stron"], skill: null } },
+          comprehension: { question: "Co powiniene\u015b/powinno\u015b wzi\u0105\u0107 pod uwag\u0119, gdy narz\u0119dzie bezpiecze\u0144stwa oznacza stron\u0119, kt\u00f3rej regularnie u\u017cywasz?", options: ["Zawsze s\u0142uchaj ostrze\u017cenia \u2014 narz\u0119dzia bezpiecze\u0144stwa nigdy si\u0119 nie myl\u0105", "Ignoruj wszystkie przysz\u0142e ostrze\u017cenia, skoro to by\u0142 fa\u0142szywy alarm", "Sprawd\u017a, czy adres URL pasuje do oczekiwanego \u2014 je\u015bli tak, narz\u0119dzie mog\u0142o pope\u0142ni\u0107 b\u0142\u0105d (fa\u0142szywy alarm)"], correct: 2 },
+        },
+        {
+          id: "L2", pair: "legitimate", isPhishing: false, title: "Stripe Checkout", domain: "checkout.stripe.com",
+          imageLabel: "Stripe", category: "False Positive", signals: [],
+          pageContent: { heading: "Stripe", subtitle: "Doko\u0144cz p\u0142atno\u015b\u0107 bezpiecznie. Suma zam\u00f3wienia: 109 z\u0142.", field1: "Numer karty", field2: "CVC", button: "Zap\u0142a\u0107 109 z\u0142", isHTTP: false },
+          interventions: { B: { headline: "\u26a0\ufe0f Wykryto mo\u017cliwy phishing", body: null, reasons: ["Strona prosi o dane karty p\u0142atniczej", "Domena (checkout.stripe.com) u\u017cywa subdomeny, kt\u00f3ra mo\u017ce by\u0107 podszywaana", "Strony p\u0142atno\u015bci s\u0105 cz\u0119stym celem atak\u00f3w phishingowych"], skill: null } },
+          comprehension: { question: "Jak rozr\u00f3\u017cni\u0107 prawdziw\u0105 stron\u0119 p\u0142atno\u015bci od strony phishingowej?", options: ["Prawdziwe strony p\u0142atno\u015bci zawsze maj\u0105 zielone t\u0142o", "Sprawd\u017a, czy domena dok\u0142adnie odpowiada znanemu dostawcy p\u0142atno\u015bci (np. stripe.com) i czy po\u0142\u0105czenie jest HTTPS", "Prawdziwe strony p\u0142atno\u015bci nigdy nie prosz\u0105 o numer CVV"], correct: 1 },
+        },
+      ],
+    },
+    it: {
+      phishing: [
+        {
+          id: "S1", pair: "brand", isPhishing: true, title: "PayPal Login", domain: "paypa1-secure.com",
+          imageLabel: "PayPal", category: "Brand Impersonation",
+          signals: ["brand_lookalike:paypal", "credential_intent"],
+          pageContent: { heading: "PayPal", subtitle: "Accedi al tuo account", field1: "Email o nome utente", field2: "Password", button: "Accedi", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Sito ingannevole", body: "Questo sito potrebbe indurti a fare qualcosa di pericoloso, come installare software o rivelare informazioni personali.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ['Il dominio "paypa1-secure.com" imita "paypal.com" (usa il numero "1" al posto della lettera "l")', "La pagina contiene un modulo di accesso che richiede le tue credenziali", "Il dominio \u00e8 stato registrato di recente e non \u00e8 associato a PayPal"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Riconoscere i domini contraffatti", body: null, reasons: null, skill: { name: "Riconoscere i domini contraffatti", lesson: 'Gli aggressori registrano spesso domini quasi identici a marchi reali \u2014 scambiando lettere con numeri, aggiungendo trattini o parole extra. Questa pagina usa "paypa1-secure.com" dove la "l" di PayPal \u00e8 stata sostituita con "1".', action: "Prima di inserire le credenziali, controlla sempre attentamente la barra degli indirizzi. Il dominio corrisponde esattamente? In caso di dubbio, apri una nuova scheda e digita l\u2019indirizzo reale.", tip: "Questa competenza si applica a qualsiasi marchio \u2014 banche, negozi, social media. Verifica sempre il dominio prima di inserire le credenziali." } },
+          },
+          comprehension: { question: "Perch\u00e9 questa pagina \u00e8 stata segnalata come sospetta?", options: ["La pagina si caricava lentamente e aveva immagini rotte", "Il nome del dominio imita un marchio reale scambiando caratteri simili", "La pagina utilizzava una versione obsoleta di HTML"], correct: 1 },
+        },
+        {
+          id: "S2", pair: "brand", isPhishing: true, title: "Microsoft 365 Login", domain: "microsoftt-login.com",
+          imageLabel: "Microsoft", category: "Brand Impersonation",
+          signals: ["brand_lookalike:microsoft", "credential_intent"],
+          pageContent: { heading: "Microsoft", subtitle: "Accedi al tuo account", field1: "Email o nome utente", field2: "Password", button: "Accedi", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Sito ingannevole", body: "Questo sito potrebbe indurti a fare qualcosa di pericoloso, come installare software o rivelare informazioni personali.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ['Il dominio "microsoftt-login.com" non \u00e8 un dominio ufficiale Microsoft (nota la doppia "t")', "La pagina richiede credenziali email aziendali", "L\u2019accesso ufficiale Microsoft avviene solo su microsoft.com, live.com o office.com"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Verificare i domini ufficiali", body: null, reasons: null, skill: { name: "Verificare i domini ufficiali", lesson: 'I servizi legittimi hanno un piccolo insieme di domini ufficiali. Microsoft usa solo microsoft.com, live.com e office.com per l\u2019accesso. Questa pagina usa "microsoftt-login.com" \u2014 un dominio non ufficiale con una sottile "t" in pi\u00f9.', action: "Quando ti viene chiesto di accedere, verifica che il dominio sia uno che riconosci come ufficiale. Se non sei sicuro/a, cerca il nome del servizio e accedi direttamente.", tip: "La maggior parte dei servizi importanti pubblica i propri domini ufficiali. Aggiungi ai segnalibri le pagine di accesso importanti." } },
+          },
+          comprehension: { question: "Qual \u00e8 l\u2019azione pi\u00f9 sicura se non sei sicuro/a che una pagina di accesso sia reale?", options: ["Inserire prima una password falsa per testare la reazione del sito", "Navigare direttamente al sito ufficiale digitando l\u2019indirizzo o usando un segnalibro", "Controllare se la pagina ha un design professionale con il logo aziendale"], correct: 1 },
+        },
+        {
+          id: "S3", pair: "urgency", isPhishing: true, title: "Bank Account Suspended", domain: "secure-verify-bank.com",
+          imageLabel: "Bank", category: "Urgency Manipulation",
+          signals: ["urgency_language", "credential_intent", "suspicious_domain"],
+          pageContent: { heading: "SecureBank", subtitle: "\u26a0\ufe0f Il tuo conto \u00e8 stato sospeso. Verifica immediatamente la tua identit\u00e0 per ripristinare l\u2019accesso.", field1: "Numero conto", field2: "Password", button: "Verifica ora", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Sito ingannevole", body: "Questo sito potrebbe indurti a fare qualcosa di pericoloso, come installare software o rivelare informazioni personali.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ['La pagina usa un linguaggio urgente: "conto sospeso", "verifica immediatamente"', "Il dominio non \u00e8 associato a nessuna banca conosciuta", "La pagina richiede credenziali bancarie sensibili"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Riconoscere le trappole dell\u2019urgenza", body: null, reasons: null, skill: { name: "Riconoscere le trappole dell\u2019urgenza", lesson: 'Gli aggressori creano panico per disattivare il tuo pensiero critico. Frasi come "conto sospeso", "verifica immediatamente" sono progettate per farti agire prima di pensare. Le banche vere raramente usano questo tipo di pressione.', action: "Quando vedi messaggi di sicurezza urgenti, fermati. Non cliccare su nessun link e non inserire dati. Contatta direttamente la tua banca usando il numero sul retro della carta.", tip: "Questa tecnica viene usata in molti tipi di truffa \u2014 finte consegne, avvisi fiscali, alert di supporto tecnico. L\u2019urgenza \u00e8 sempre l\u2019indizio." } },
+          },
+          comprehension: { question: "Perch\u00e9 le pagine di phishing usano spesso un linguaggio urgente?", options: ["Perch\u00e9 sono legalmente obbligate ad avvisare gli utenti", "Per spingerti ad agire rapidamente prima che tu possa pensare criticamente", "Perch\u00e9 le pagine urgenti si caricano pi\u00f9 velocemente"], correct: 1 },
+        },
+        {
+          id: "S4", pair: "urgency", isPhishing: true, title: "Delivery Payment Required", domain: "parcel-redelivery-fee.com",
+          imageLabel: "Delivery", category: "Urgency Manipulation",
+          signals: ["urgency_language", "payment_intent", "suspicious_domain"],
+          pageContent: { heading: "QuickPost", subtitle: "\ud83d\udce6 Tentativo di consegna fallito. \u00c8 richiesto un pagamento di \u20ac1,50 per riprogrammare la consegna entro 24 ore.", field1: "Numero carta", field2: "CVV", button: "Paga \u20ac1,50", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Sito ingannevole", body: "Questo sito potrebbe indurti a fare qualcosa di pericoloso, come installare software o rivelare informazioni personali.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ['La pagina usa urgenza: "tentativo di consegna fallito", "paga entro 24 ore"', "Il dominio non \u00e8 associato a nessun servizio di consegna conosciuto", "La pagina richiede dati della carta per una piccola somma \u2014 una tattica comune di phishing"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Riconoscere le false richieste di pagamento", body: null, reasons: null, skill: { name: "Riconoscere le false richieste di pagamento", lesson: 'Piccole tariffe inaspettate sono un\u2019esca comune. Gli aggressori sanno che \u20ac1,50 per la "riconsegna" sembra a basso rischio, cos\u00ec le persone inseriscono i dati della carta senza pensare. Ma l\u2019obiettivo non \u00e8 la tariffa \u2014 \u00e8 il tuo numero di carta completo.', action: "Se ricevi una notifica di consegna che chiede un pagamento, vai direttamente al sito ufficiale del corriere. Non inserire mai dati della carta su una pagina raggiunta tramite un link.", tip: "Questo schema si applica a qualsiasi richiesta di pagamento inaspettata \u2014 multe, rinnovi di abbonamento, rimborsi fiscali." } },
+          },
+          comprehension: { question: "Qual \u00e8 il vero obiettivo di una falsa pagina di pagamento per la consegna?", options: ["Raccogliere la tariffa di riconsegna dal maggior numero possibile di persone", "Catturare i dati completi della tua carta di pagamento per uso fraudolento", "Verificare se il tuo indirizzo email \u00e8 attivo"], correct: 1 },
+        },
+        {
+          id: "S5", pair: "technical", isPhishing: true, title: "Amazon Lookalike (Punycode)", domain: "\u0430mazon.com (Cyrillic '\u0430')",
+          imageLabel: "Amazon", category: "Technical Deception",
+          signals: ["punycode_domain", "credential_intent", "brand_lookalike:amazon"],
+          pageContent: { heading: "amazon", subtitle: "Accedi al tuo account", field1: "Email o nome utente", field2: "Password", button: "Accedi", isHTTP: false },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Sito ingannevole", body: "Questo sito potrebbe indurti a fare qualcosa di pericoloso, come installare software o rivelare informazioni personali.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ["Il dominio usa caratteri speciali (punycode) che sembrano identici alle lettere normali ma sono diversi", "Il vero indirizzo di questa pagina \u00e8 xn--mazon-wqa.com \u2014 non amazon.com", "La pagina richiede le credenziali del tuo account Amazon"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Capire i caratteri nascosti", body: null, reasons: null, skill: { name: "Capire i caratteri nascosti", lesson: 'Alcuni alfabeti hanno lettere identiche a quelle inglesi ma tecnicamente sono caratteri diversi. Gli aggressori sfruttano questo registrando domini come "\u0430mazon.com" dove la "\u0430" \u00e8 un carattere cirillico. Il browser vede un sito completamente diverso (xn--mazon-wqa.com), ma i tuoi occhi vedono "amazon.com".', action: "Se una pagina di accesso appare inaspettatamente, controlla la barra degli indirizzi per eventuali codifiche insolite. I browser moderni spesso mostrano la versione punycode (che inizia con xn--).", tip: "Questo attacco funziona perch\u00e9 gli esseri umani leggono le forme, non i codici dei caratteri. Aggiungere i siti importanti ai segnalibri \u00e8 una delle difese pi\u00f9 efficaci." } },
+          },
+          comprehension: { question: "Cos\u2019\u00e8 il punycode nel contesto della sicurezza web?", options: ["Un tipo di crittografia usata per proteggere le password", "Un modo per codificare caratteri speciali nei nomi di dominio, che gli aggressori possono sfruttare per creare indirizzi falsi convincenti", "Un linguaggio di programmazione usato per costruire siti di phishing"], correct: 1 },
+        },
+        {
+          id: "S6", pair: "technical", isPhishing: true, title: "Insecure Google Sign-In", domain: "http://google-signin.net (HTTP, not HTTPS)",
+          imageLabel: "Google", category: "Technical Deception",
+          signals: ["insecure_connection", "credential_intent", "brand_lookalike:google"],
+          pageContent: { heading: "Google", subtitle: "Accedi al tuo account", field1: "Email o nome utente", field2: "Password", button: "Accedi", isHTTP: true },
+          interventions: {
+            A: { headline: "\u26a0\ufe0f Sito ingannevole", body: "Questo sito potrebbe indurti a fare qualcosa di pericoloso, come installare software o rivelare informazioni personali.", reasons: null, skill: null },
+            B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ["Questa pagina usa HTTP (non HTTPS) \u2014 i tuoi dati vengono inviati senza crittografia", "Il dominio google-signin.net non \u00e8 un dominio ufficiale di Google", "La pagina richiede le credenziali Google su una connessione non sicura"], skill: null },
+            C: { headline: "\ud83d\udee1\ufe0f Coach: Controllare la sicurezza della connessione", body: null, reasons: null, skill: { name: "Controllare la sicurezza della connessione", lesson: 'Ogni pagina di accesso legittima usa HTTPS \u2014 indicato dall\u2019icona del lucchetto e "https://" nella barra degli indirizzi. Questa pagina usa HTTP semplice, il che significa che tutto ci\u00f2 che digiti (incluse le password) viene inviato in testo leggibile.', action: 'Prima di inserire qualsiasi password, controlla l\u2019icona del lucchetto nella barra degli indirizzi. Se vedi "Non sicuro" o l\u2019indirizzo inizia con "http://", non inserire informazioni personali.', tip: "HTTPS da solo non garantisce che un sito sia legittimo \u2014 anche gli aggressori possono ottenere certificati. Ma l\u2019assenza di HTTPS su una pagina di accesso \u00e8 sempre un segnale d\u2019allarme." } },
+          },
+          comprehension: { question: "Perch\u00e9 \u00e8 pericoloso inserire una password su una pagina HTTP invece che HTTPS?", options: ["Le pagine HTTP contengono sempre virus", "La tua password viene inviata senza crittografia e potrebbe essere intercettata da chiunque nella rete", "Le pagine HTTP non possono visualizzare correttamente i moduli di accesso"], correct: 1 },
+        },
+      ],
+      legitimate: [
+        {
+          id: "L1", pair: "legitimate", isPhishing: false, title: "University Library Portal", domain: "library.staffs.ac.uk",
+          imageLabel: "University", category: "False Positive", signals: [],
+          pageContent: { heading: "Biblioteca Universit\u00e0 di Staffordshire", subtitle: "Accedi con le credenziali universitarie per accedere a database, riviste ed e-book.", field1: "Email universitaria", field2: "Password", button: "Accedi", isHTTP: false },
+          interventions: { B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ["Il dominio usa una struttura di sottodominio (library.staffs.ac.uk) che a volte viene usata dagli aggressori", "La pagina contiene un modulo di accesso", "Questo sito non appare nelle liste comuni di siti sicuri"], skill: null } },
+          comprehension: { question: "Cosa dovresti considerare quando un tool di sicurezza segnala un sito che usi regolarmente?", options: ["Obbedisci sempre all\u2019avviso \u2014 i tool di sicurezza non sbagliano mai", "Ignora tutti i futuri avvisi dato che questo era sbagliato", "Verifica che l\u2019URL corrisponda a quello atteso \u2014 in tal caso, il tool potrebbe aver commesso un errore (falso positivo)"], correct: 2 },
+        },
+        {
+          id: "L2", pair: "legitimate", isPhishing: false, title: "Stripe Checkout", domain: "checkout.stripe.com",
+          imageLabel: "Stripe", category: "False Positive", signals: [],
+          pageContent: { heading: "Stripe", subtitle: "Completa il pagamento in sicurezza. Totale ordine: \u20ac24,99.", field1: "Numero carta", field2: "CVC", button: "Paga \u20ac24,99", isHTTP: false },
+          interventions: { B: { headline: "\u26a0\ufe0f Possibile phishing rilevato", body: null, reasons: ["La pagina richiede dati della carta di pagamento", "Il dominio (checkout.stripe.com) usa un sottodominio che potrebbe essere falsificato", "Le pagine di pagamento sono comunemente prese di mira dagli attacchi di phishing"], skill: null } },
+          comprehension: { question: "Come distinguere una pagina di pagamento legittima da una di phishing?", options: ["Le pagine di pagamento legittime hanno sempre uno sfondo verde", "Verifica che il dominio corrisponda esattamente al provider di pagamento conosciuto (es. stripe.com) e che la connessione sia HTTPS", "Le pagine di pagamento reali non chiedono mai il CVV"], correct: 1 },
+        },
+      ],
+    },
+  };
+  return S[lang] || S.en;
+}
+
+// ---------- LATIN SQUARE + SEQUENCE ----------
+
 const LATIN_SQUARES = [
-  ["A", "B", "C", "A", "B", "C"],
-  ["B", "C", "A", "B", "C", "A"],
-  ["C", "A", "B", "C", "A", "B"],
-  ["A", "C", "B", "C", "B", "A"],
-  ["B", "A", "C", "A", "C", "B"],
-  ["C", "B", "A", "B", "A", "C"],
+  ["A","B","C","A","B","C"], ["B","C","A","B","C","A"], ["C","A","B","C","A","B"],
+  ["A","C","B","C","B","A"], ["B","A","C","A","C","B"], ["C","B","A","B","A","C"],
 ];
-
 const CONDITION_LABELS = { A: "Generic Warning", B: "Warning + Reasons", C: "Skill-Based Coach" };
 
-function buildScenarioSequence(latinGroup) {
+function buildScenarioSequence(latinGroup, lang) {
+  const data = getScenarios(lang);
   const conditionOrder = LATIN_SQUARES[latinGroup];
-  const phishing = PHISHING_SCENARIOS.map((s, i) => ({
-    ...s,
-    condition: conditionOrder[i],
-  }));
-  const legit = LEGITIMATE_SCENARIOS.map((s) => ({
-    ...s,
-    condition: "B",
-  }));
-
-  const sequence = [...phishing];
-  sequence.splice(3, 0, legit[0]);
-  sequence.splice(6, 0, legit[1]);
-  return sequence;
+  const phishing = data.phishing.map((s, i) => ({ ...s, condition: conditionOrder[i] }));
+  const legit = data.legitimate.map((s) => ({ ...s, condition: "B" }));
+  const seq = [...phishing];
+  seq.splice(3, 0, legit[0]);
+  seq.splice(6, 0, legit[1]);
+  return seq;
 }
 
 // ---------- PAGE MOCKUP ----------
@@ -448,174 +543,94 @@ function PageMockup({ scenario }) {
     University: { bg: "#f8f7f4", accent: "#6b2737", btnBg: "#6b2737" },
     Stripe: { bg: "#f6f9fc", accent: "#635bff", btnBg: "#635bff" },
   };
-
   const theme = brandColors[scenario.imageLabel] || brandColors.Google;
   const pc = scenario.pageContent;
 
   return (
-    <div style={{
-      background: theme.bg, borderRadius: 8, border: "1px solid #e0e0e0",
-      overflow: "hidden", width: "100%", maxWidth: 480, margin: "0 auto",
-      boxShadow: "0 2px 12px rgba(0,0,0,0.08)", pointerEvents: "none", userSelect: "none",
-    }}>
-      <div style={{
-        background: "#dee1e6", padding: "8px 12px",
-        display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #c8ccd0",
-      }}>
+    <div style={{ background: theme.bg, borderRadius: 8, border: "1px solid #e0e0e0", overflow: "hidden", width: "100%", maxWidth: 480, margin: "0 auto", boxShadow: "0 2px 12px rgba(0,0,0,0.08)", pointerEvents: "none", userSelect: "none" }}>
+      <div style={{ background: "#dee1e6", padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #c8ccd0" }}>
         <div style={{ display: "flex", gap: 5 }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffbd2e" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28ca41" }} />
         </div>
-        <div style={{
-          flex: 1, background: "#fff", borderRadius: 6, padding: "5px 10px",
-          fontSize: 12, fontFamily: "SF Mono, Monaco, Consolas, monospace",
-          color: pc.isHTTP ? "#c0392b" : "#555", display: "flex", alignItems: "center", gap: 6,
-        }}>
-          {pc.isHTTP ? (
-            <span style={{ color: "#c0392b", fontWeight: 600, fontSize: 11 }}>⚠ Not secure</span>
-          ) : (
-            <span style={{ color: "#1a7f37", fontSize: 13 }}>🔒</span>
-          )}
+        <div style={{ flex: 1, background: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontFamily: "SF Mono, Monaco, Consolas, monospace", color: pc.isHTTP ? "#c0392b" : "#555", display: "flex", alignItems: "center", gap: 6 }}>
+          {pc.isHTTP ? <span style={{ color: "#c0392b", fontWeight: 600, fontSize: 11 }}>⚠ Not secure</span> : <span style={{ color: "#1a7f37", fontSize: 13 }}>🔒</span>}
           <span style={{ opacity: 0.5 }}>{pc.isHTTP ? "http://" : "https://"}</span>
           <span style={{ fontWeight: 500 }}>{scenario.domain.split(" ")[0]}</span>
         </div>
       </div>
-
       <div style={{ padding: "32px 28px", textAlign: "center" }}>
-        <div style={{
-          fontSize: scenario.imageLabel === "University" ? 20 : 26,
-          fontWeight: 700, color: theme.accent, marginBottom: 6,
-          fontFamily: "system-ui, -apple-system, sans-serif",
-        }}>
-          {pc.heading}
-        </div>
-        <p style={{ fontSize: 14, color: "#555", marginBottom: 24, lineHeight: 1.4 }}>
-          {pc.subtitle}
-        </p>
+        <div style={{ fontSize: scenario.imageLabel === "University" ? 20 : 26, fontWeight: 700, color: theme.accent, marginBottom: 6, fontFamily: "system-ui, -apple-system, sans-serif" }}>{pc.heading}</div>
+        <p style={{ fontSize: 14, color: "#555", marginBottom: 24, lineHeight: 1.4 }}>{pc.subtitle}</p>
         <div style={{ maxWidth: 300, margin: "0 auto", textAlign: "left" }}>
-          <div style={{
-            background: "#fff", border: "1px solid #ddd", borderRadius: 6,
-            padding: "10px 12px", marginBottom: 10, fontSize: 13, color: "#999",
-          }}>
-            {pc.field1}
-          </div>
-          <div style={{
-            background: "#fff", border: "1px solid #ddd", borderRadius: 6,
-            padding: "10px 12px", marginBottom: 16, fontSize: 13, color: "#999",
-          }}>
-            {pc.field2}
-          </div>
-          <div style={{
-            background: theme.btnBg, color: "#fff", padding: "10px",
-            borderRadius: 6, textAlign: "center", fontSize: 14, fontWeight: 600,
-          }}>
-            {pc.button}
-          </div>
+          <div style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 6, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: "#999" }}>{pc.field1}</div>
+          <div style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 6, padding: "10px 12px", marginBottom: 16, fontSize: 13, color: "#999" }}>{pc.field2}</div>
+          <div style={{ background: theme.btnBg, color: "#fff", padding: "10px", borderRadius: 6, textAlign: "center", fontSize: 14, fontWeight: 600 }}>{pc.button}</div>
         </div>
       </div>
     </div>
   );
 }
 
-// ---------- BUTTON STYLES (EQUALISED PROMINENCE) ----------
+// ---------- BUTTON STYLES (EQUALISED) ----------
 
-const btnLeave = {
-  background: "#fff", color: "#1a1a1a", border: "2px solid #d1d5db", borderRadius: 8,
-  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-const btnContinue = {
-  background: "#fff", color: "#1a1a1a", border: "2px solid #d1d5db", borderRadius: 8,
-  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-const btnLeaveCoach = {
-  background: "#fff", color: "#1e40af", border: "2px solid #93c5fd", borderRadius: 8,
-  padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-const btnNext = {
-  background: "#1e40af", color: "#fff", border: "none", borderRadius: 10,
-  padding: "12px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 16,
-};
+const btnLeave = { background: "#fff", color: "#1a1a1a", border: "2px solid #d1d5db", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+const btnContinue = { background: "#fff", color: "#1a1a1a", border: "2px solid #d1d5db", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+const btnLeaveCoach = { background: "#fff", color: "#1e40af", border: "2px solid #93c5fd", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+const btnNext = { background: "#1e40af", color: "#fff", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 16 };
 
 // ---------- INTERVENTION PANELS ----------
 
 function ConditionA({ intervention, onProceed, onGoBack }) {
+  const t = UI[useLang()];
   return (
-    <div style={{
-      background: "#fef2f2", border: "2px solid #dc2626", borderRadius: 12,
-      padding: "20px 24px", maxWidth: 480, margin: "16px auto 0",
-    }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>
-        {intervention.headline}
-      </div>
-      <p style={{ fontSize: 14, color: "#7f1d1d", lineHeight: 1.5, margin: "0 0 16px" }}>
-        {intervention.body}
-      </p>
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onGoBack} style={btnLeave}>← Leave this page</button>
-        <button onClick={onProceed} style={btnContinue}>Continue to site</button>
+    <div style={{ background: "#fef2f2", border: "2px solid #dc2626", borderRadius: 12, padding: "20px 24px", maxWidth: 480, margin: "16px auto 0" }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>{intervention.headline}</div>
+      <p style={{ fontSize: 14, color: "#7f1d1d", lineHeight: 1.5, margin: "0 0 16px" }}>{intervention.body}</p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <button onClick={onGoBack} style={btnLeave}>{t.leaveBtn}</button>
+        <button onClick={onProceed} style={btnContinue}>{t.continueToSite}</button>
       </div>
     </div>
   );
 }
 
 function ConditionB({ intervention, onProceed, onGoBack }) {
+  const t = UI[useLang()];
   return (
-    <div style={{
-      background: "#fef9ee", border: "2px solid #d97706", borderRadius: 12,
-      padding: "20px 24px", maxWidth: 480, margin: "16px auto 0",
-    }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: "#b45309", marginBottom: 8 }}>
-        {intervention.headline}
-      </div>
-      <p style={{ fontSize: 14, color: "#78350f", lineHeight: 1.5, margin: "0 0 10px" }}>
-        {intervention.body}
-      </p>
+    <div style={{ background: "#fef9ee", border: "2px solid #d97706", borderRadius: 12, padding: "20px 24px", maxWidth: 480, margin: "16px auto 0" }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#b45309", marginBottom: 8 }}>{intervention.headline}</div>
+      <p style={{ fontSize: 14, color: "#78350f", lineHeight: 1.5, margin: "0 0 10px" }}>{t.flaggedReasons}</p>
       <ul style={{ margin: "0 0 16px", paddingLeft: 18, fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>
         {intervention.reasons.map((r, i) => <li key={i} style={{ marginBottom: 4 }}>{r}</li>)}
       </ul>
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onGoBack} style={btnLeave}>← Leave this page</button>
-        <button onClick={onProceed} style={btnContinue}>Continue to site</button>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <button onClick={onGoBack} style={btnLeave}>{t.leaveBtn}</button>
+        <button onClick={onProceed} style={btnContinue}>{t.continueToSite}</button>
       </div>
     </div>
   );
 }
 
 function ConditionC({ intervention, onProceed, onGoBack }) {
+  const t = UI[useLang()];
   const skill = intervention.skill;
   return (
-    <div style={{
-      background: "#f0f7ff", border: "2px solid #3b82f6", borderRadius: 12,
-      padding: "20px 24px", maxWidth: 480, margin: "16px auto 0",
-    }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: "#1e40af", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-        {intervention.headline}
-      </div>
-      <div style={{
-        background: "#dbeafe", borderRadius: 8, padding: "10px 14px", marginBottom: 12,
-        fontSize: 11, fontWeight: 600, color: "#1e3a5f", textTransform: "uppercase", letterSpacing: 0.8,
-      }}>
-        Skill: {skill.name}
-      </div>
-      <p style={{ fontSize: 14, color: "#1e3a5f", lineHeight: 1.6, margin: "0 0 12px" }}>
-        {skill.lesson}
-      </p>
+    <div style={{ background: "#f0f7ff", border: "2px solid #3b82f6", borderRadius: 12, padding: "20px 24px", maxWidth: 480, margin: "16px auto 0" }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>{intervention.headline}</div>
+      <div style={{ background: "#dbeafe", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 11, fontWeight: 600, color: "#1e3a5f", textTransform: "uppercase", letterSpacing: 0.8 }}>Skill: {skill.name}</div>
+      <p style={{ fontSize: 14, color: "#1e3a5f", lineHeight: 1.6, margin: "0 0 12px" }}>{skill.lesson}</p>
       <div style={{ background: "#e0f2fe", borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#0c4a6e", marginBottom: 4 }}>✅ Recommended Action</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#0c4a6e", marginBottom: 4 }}>{t.recommendedAction}</div>
         <p style={{ fontSize: 13, color: "#0c4a6e", lineHeight: 1.5, margin: 0 }}>{skill.action}</p>
       </div>
-      <div style={{
-        background: "#f0f9ff", borderRadius: 8, padding: "8px 14px", marginBottom: 16,
-        borderLeft: "3px solid #3b82f6",
-      }}>
-        <p style={{ fontSize: 12, color: "#1e40af", lineHeight: 1.5, margin: 0, fontStyle: "italic" }}>
-          💡 {skill.tip}
-        </p>
+      <div style={{ background: "#f0f9ff", borderRadius: 8, padding: "8px 14px", marginBottom: 16, borderLeft: "3px solid #3b82f6" }}>
+        <p style={{ fontSize: 12, color: "#1e40af", lineHeight: 1.5, margin: 0, fontStyle: "italic" }}>💡 {skill.tip}</p>
       </div>
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onGoBack} style={btnLeaveCoach}>← Leave this page</button>
-        <button onClick={onProceed} style={btnContinue}>Continue to site</button>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <button onClick={onGoBack} style={btnLeaveCoach}>{t.leaveBtn}</button>
+        <button onClick={onProceed} style={btnContinue}>{t.continueToSite}</button>
       </div>
     </div>
   );
@@ -624,85 +639,80 @@ function ConditionC({ intervention, onProceed, onGoBack }) {
 // ---------- DATA EXPORT ----------
 
 function buildCSV(data) {
-  const headers = [
-    "participant_id", "latin_group", "age", "gender", "tech_confidence", "phishing_experience",
-    "scenario_index", "scenario_id", "scenario_category", "is_phishing",
-    "condition", "condition_label",
-    "decision", "decision_time_ms", "comprehension_answer", "comprehension_correct",
-    "confidence", "annoyance_A", "annoyance_B", "annoyance_C", "preference", "open_text"
-  ];
-
+  const headers = ["participant_id","latin_group","language","age","gender","tech_confidence","phishing_experience","scenario_index","scenario_id","scenario_category","is_phishing","condition","condition_label","decision","decision_time_ms","comprehension_answer","comprehension_correct","confidence","annoyance_A","annoyance_B","annoyance_C","preference","open_text"];
   const rows = data.scenarioResults.map((r, i) => [
-    data.participantId,
-    data.latinGroup,
-    data.demographics.age,
-    data.demographics.gender,
-    data.demographics.techConf,
-    data.demographics.phishExp,
-    i + 1,
-    r.scenarioId,
-    r.category,
-    r.isPhishing ? 1 : 0,
-    r.condition,
-    CONDITION_LABELS[r.condition] || "Warning + Reasons",
-    r.decision,
-    r.decisionTimeMs,
-    r.comprehensionAnswer,
-    r.comprehensionCorrect ? 1 : 0,
-    r.confidence,
-    data.postStudy.annoyance.A,
-    data.postStudy.annoyance.B,
-    data.postStudy.annoyance.C,
-    data.postStudy.preference,
-    `"${(data.postStudy.openText || "").replace(/"/g, '""')}"`,
+    data.participantId, data.latinGroup, data.language, data.demographics.age, data.demographics.gender,
+    data.demographics.techConf, data.demographics.phishExp, i+1, r.scenarioId, r.category,
+    r.isPhishing ? 1 : 0, r.condition, CONDITION_LABELS[r.condition] || "Warning + Reasons",
+    r.decision, r.decisionTimeMs, r.comprehensionAnswer, r.comprehensionCorrect ? 1 : 0,
+    r.confidence, data.postStudy.annoyance.A, data.postStudy.annoyance.B, data.postStudy.annoyance.C,
+    data.postStudy.preference, `"${(data.postStudy.openText || "").replace(/"/g, '""')}"`,
   ]);
-
-  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
 }
 
 function buildMailtoLink(data) {
   const csv = buildCSV(data);
   const subject = encodeURIComponent(`Safe Interceptor Study — ${data.participantId}`);
-  const body = encodeURIComponent(
-    `Hi,\n\nPlease find my Safe Interceptor study results below.\n\nParticipant ID: ${data.participantId}\nCompleted: ${data.completedAt}\nLatin Group: ${data.latinGroup}\n\n--- CSV DATA (paste everything below into a .csv file) ---\n\n${csv}\n\n--- END ---`
-  );
+  const body = encodeURIComponent(`Hi,\n\nPlease find my Safe Interceptor study results below.\n\nParticipant ID: ${data.participantId}\nCompleted: ${data.completedAt}\nLatin Group: ${data.latinGroup}\nLanguage: ${data.language}\n\n--- CSV DATA ---\n\n${csv}\n\n--- END ---`);
   return `mailto:${RESEARCHER_EMAIL}?subject=${subject}&body=${body}`;
 }
 
 // ---------- PAGES ----------
 
+function LangPickerPage({ onSelect }) {
+  const langs = [
+    { code: "en", flag: "🇬🇧", label: "English" },
+    { code: "pl", flag: "🇵🇱", label: "Polski" },
+    { code: "it", flag: "🇮🇹", label: "Italiano" },
+  ];
+  return (
+    <div style={pageContainer}>
+      <div style={{ ...card, textAlign: "center" }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#111", margin: "0 0 8px" }}>Choose Your Language</h1>
+        <p style={{ color: "#555", fontSize: 14, margin: "0 0 28px", lineHeight: 1.5 }}>
+          Wybierz język / Scegli la lingua
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {langs.map(l => (
+            <button key={l.code} onClick={() => onSelect(l.code)} style={{
+              display: "flex", alignItems: "center", gap: 14, padding: "16px 20px",
+              borderRadius: 12, border: "2px solid #e5e7eb", background: "#fff",
+              cursor: "pointer", fontSize: 18, fontWeight: 600, color: "#111",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#6366f1"; e.currentTarget.style.background = "#eef2ff"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.background = "#fff"; }}
+            >
+              <span style={{ fontSize: 32 }}>{l.flag}</span>
+              <span>{l.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConsentPage({ onConsent }) {
+  const t = UI[useLang()];
   const [agreed, setAgreed] = useState(false);
   return (
     <div style={pageContainer}>
       <div style={card}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>
-          Honours Research Study
-        </div>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111", margin: "0 0 8px", lineHeight: 1.2 }}>
-          Safe Interceptor: Warning Design Evaluation
-        </h1>
-        <p style={{ color: "#555", fontSize: 15, lineHeight: 1.6, margin: "0 0 20px" }}>
-          Thank you for taking part in this study. You will be shown 8 simulated web scenarios, each with a security warning. For each one, you will decide whether to proceed or leave the page, answer a short question, and rate your confidence. The study takes approximately 15–20 minutes.
-        </p>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>{t.honoursBadge}</div>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111", margin: "0 0 8px", lineHeight: 1.2 }}>{t.studyTitle}</h1>
+        <p style={{ color: "#555", fontSize: 15, lineHeight: 1.6, margin: "0 0 20px" }}>{t.consentIntro}</p>
         <div style={{ background: "#f8fafc", borderRadius: 10, padding: "16px 18px", marginBottom: 20, fontSize: 14, lineHeight: 1.6, color: "#444" }}>
-          <strong>Key information:</strong><br />
-          • All scenarios are simulated — no real websites are involved<br />
-          • Your responses are anonymous and identified only by a random code<br />
-          • You may withdraw at any time by closing the browser tab<br />
-          • Data will be used solely for academic research purposes<br />
-          • At the end, your results will be submitted automatically
+          <strong>{t.keyInfo}</strong><br />
+          {t.keyPoints.map((p, i) => <span key={i}>• {p}<br /></span>)}
         </div>
         <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 14, color: "#333" }}>
-          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)}
-            style={{ marginTop: 3, width: 18, height: 18, accentColor: "#4f46e5" }} />
-          <span>I understand the above information and consent to participate in this study</span>
+          <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#4f46e5" }} />
+          <span>{t.consentCheck}</span>
         </label>
         <div style={{ textAlign: "right" }}>
-          <button onClick={onConsent} disabled={!agreed}
-            style={{ ...btnNext, opacity: agreed ? 1 : 0.4, cursor: agreed ? "pointer" : "not-allowed" }}>
-            Continue →
-          </button>
+          <button onClick={onConsent} disabled={!agreed} style={{ ...btnNext, opacity: agreed ? 1 : 0.4, cursor: agreed ? "pointer" : "not-allowed" }}>{t.continueBtn}</button>
         </div>
       </div>
     </div>
@@ -710,42 +720,25 @@ function ConsentPage({ onConsent }) {
 }
 
 function DemographicsPage({ onSubmit }) {
+  const t = UI[useLang()];
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
   const [techConf, setTechConf] = useState(3);
   const [phishExp, setPhishExp] = useState("");
   const valid = age && gender && phishExp;
-
   return (
     <div style={pageContainer}>
       <div style={card}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 20px", color: "#111" }}>About You</h2>
-
-        <FieldLabel label="Age range">
-          <SelectGroup options={["18–24", "25–34", "35–44", "45–54", "55–64", "65+"]} value={age} onChange={setAge} />
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 20px", color: "#111" }}>{t.aboutYou}</h2>
+        <FieldLabel label={t.ageLabel}><SelectGroup options={["18–24","25–34","35–44","45–54","55–64","65+"]} value={age} onChange={setAge} /></FieldLabel>
+        <FieldLabel label={t.genderLabel}><SelectGroup options={t.genderOpts} value={gender} onChange={setGender} /></FieldLabel>
+        <FieldLabel label={t.techConfLabel(techConf)}>
+          <input type="range" min={1} max={5} step={1} value={techConf} onChange={e => setTechConf(Number(e.target.value))} style={{ width: "100%", accentColor: "#4f46e5" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#888" }}><span>{t.notConf}</span><span>{t.veryConf}</span></div>
         </FieldLabel>
-
-        <FieldLabel label="Gender">
-          <SelectGroup options={["Male", "Female", "Non-binary", "Prefer not to say"]} value={gender} onChange={setGender} />
-        </FieldLabel>
-
-        <FieldLabel label={`How confident are you with technology? (${techConf}/5)`}>
-          <input type="range" min={1} max={5} step={1} value={techConf} onChange={(e) => setTechConf(Number(e.target.value))}
-            style={{ width: "100%", accentColor: "#4f46e5" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#888" }}>
-            <span>Not confident</span><span>Very confident</span>
-          </div>
-        </FieldLabel>
-
-        <FieldLabel label="Have you ever fallen for a phishing attempt?">
-          <SelectGroup options={["Yes", "No", "Unsure"]} value={phishExp} onChange={setPhishExp} />
-        </FieldLabel>
-
+        <FieldLabel label={t.phishExpLabel}><SelectGroup options={t.phishOpts} value={phishExp} onChange={setPhishExp} /></FieldLabel>
         <div style={{ textAlign: "right" }}>
-          <button onClick={() => onSubmit({ age, gender, techConf, phishExp })} disabled={!valid}
-            style={{ ...btnNext, opacity: valid ? 1 : 0.4, cursor: valid ? "pointer" : "not-allowed" }}>
-            Start Study →
-          </button>
+          <button onClick={() => onSubmit({ age, gender, techConf, phishExp })} disabled={!valid} style={{ ...btnNext, opacity: valid ? 1 : 0.4, cursor: valid ? "pointer" : "not-allowed" }}>{t.startStudy}</button>
         </div>
       </div>
     </div>
@@ -753,184 +746,99 @@ function DemographicsPage({ onSubmit }) {
 }
 
 function ScenarioPage({ scenario, scenarioIndex, total, onComplete }) {
+  const t = UI[useLang()];
   const [phase, setPhase] = useState("decision");
   const [decision, setDecision] = useState(null);
   const [comprehensionAnswer, setComprehensionAnswer] = useState(null);
   const [confidence, setConfidence] = useState(3);
   const startTime = useRef(Date.now());
-
   const condition = scenario.condition;
   const intervention = scenario.interventions[condition];
 
-  const handleDecision = (choice) => {
-    const decisionTime = Date.now() - startTime.current;
-    setDecision({ choice, decisionTime });
-    setPhase("comprehension");
-  };
-
-  const handleComprehension = () => setPhase("confidence");
-
+  const handleDecision = (choice) => { setDecision({ choice, decisionTime: Date.now() - startTime.current }); setPhase("comprehension"); };
   const handleSubmit = () => {
-    onComplete({
-      scenarioId: scenario.id,
-      category: scenario.category,
-      isPhishing: scenario.isPhishing,
-      condition,
-      decision: decision.choice,
-      decisionTimeMs: decision.decisionTime,
-      comprehensionAnswer,
-      comprehensionCorrect: comprehensionAnswer === scenario.comprehension.correct,
-      confidence,
-    });
+    onComplete({ scenarioId: scenario.id, category: scenario.category, isPhishing: scenario.isPhishing, condition, decision: decision.choice, decisionTimeMs: decision.decisionTime, comprehensionAnswer, comprehensionCorrect: comprehensionAnswer === scenario.comprehension.correct, confidence });
   };
 
   return (
     <div style={pageContainer}>
       <div style={{ ...card, maxWidth: 560 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: 1 }}>
-            Scenario {scenarioIndex + 1} of {total}
-          </span>
-          <div style={{ display: "flex", gap: 4 }}>
-            {Array.from({ length: total }).map((_, i) => (
-              <div key={i} style={{
-                width: 20, height: 4, borderRadius: 2,
-                background: i <= scenarioIndex ? "#6366f1" : "#e2e8f0",
-              }} />
-            ))}
-          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: 1 }}>{t.scenarioOf(scenarioIndex + 1, total)}</span>
+          <div style={{ display: "flex", gap: 4 }}>{Array.from({ length: total }).map((_, i) => <div key={i} style={{ width: 20, height: 4, borderRadius: 2, background: i <= scenarioIndex ? "#6366f1" : "#e2e8f0" }} />)}</div>
         </div>
 
-        {phase === "decision" && (
-          <>
-            <p style={{ fontSize: 14, color: "#555", margin: "0 0 12px", lineHeight: 1.5 }}>
-              Imagine you are going about your normal day online. You have arrived at the page shown below — it might be something you intended to visit, or something you reached via a link. A security warning has appeared. Look at both the page and the warning, then choose what you would do.
-            </p>
+        {phase === "decision" && (<>
+          <p style={{ fontSize: 14, color: "#555", margin: "0 0 12px", lineHeight: 1.5 }}>{t.scenarioInstruction}</p>
+          <PageMockup scenario={scenario} />
+          {condition === "A" && <ConditionA intervention={intervention} onProceed={() => handleDecision("proceed")} onGoBack={() => handleDecision("go_back")} />}
+          {condition === "B" && <ConditionB intervention={intervention} onProceed={() => handleDecision("proceed")} onGoBack={() => handleDecision("go_back")} />}
+          {condition === "C" && <ConditionC intervention={intervention} onProceed={() => handleDecision("proceed")} onGoBack={() => handleDecision("go_back")} />}
+        </>)}
 
-            <PageMockup scenario={scenario} />
+        {phase === "comprehension" && (<>
+          <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px", color: "#111" }}>{t.quickQuestion}</h3>
+          <p style={{ fontSize: 15, color: "#333", margin: "0 0 16px", lineHeight: 1.5 }}>{scenario.comprehension.question}</p>
+          {scenario.comprehension.options.map((opt, i) => (
+            <label key={i} onClick={() => setComprehensionAnswer(i)} style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", marginBottom: 8, borderRadius: 10, cursor: "pointer", fontSize: 14, lineHeight: 1.5,
+              border: comprehensionAnswer === i ? "2px solid #4f46e5" : "2px solid #e5e7eb", background: comprehensionAnswer === i ? "#eef2ff" : "#fff", color: "#333",
+            }}>
+              <input type="radio" name="comp" checked={comprehensionAnswer === i} onChange={() => setComprehensionAnswer(i)} style={{ marginTop: 2, accentColor: "#4f46e5" }} />
+              <span>{opt}</span>
+            </label>
+          ))}
+          <div style={{ textAlign: "right" }}>
+            <button onClick={() => setPhase("confidence")} disabled={comprehensionAnswer === null} style={{ ...btnNext, opacity: comprehensionAnswer !== null ? 1 : 0.4, cursor: comprehensionAnswer !== null ? "pointer" : "not-allowed" }}>{t.nextBtn}</button>
+          </div>
+        </>)}
 
-            {condition === "A" && <ConditionA intervention={intervention} onProceed={() => handleDecision("proceed")} onGoBack={() => handleDecision("go_back")} />}
-            {condition === "B" && <ConditionB intervention={intervention} onProceed={() => handleDecision("proceed")} onGoBack={() => handleDecision("go_back")} />}
-            {condition === "C" && <ConditionC intervention={intervention} onProceed={() => handleDecision("proceed")} onGoBack={() => handleDecision("go_back")} />}
-          </>
-        )}
-
-        {phase === "comprehension" && (
-          <>
-            <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px", color: "#111" }}>Quick Question</h3>
-            <p style={{ fontSize: 15, color: "#333", margin: "0 0 16px", lineHeight: 1.5 }}>
-              {scenario.comprehension.question}
-            </p>
-            {scenario.comprehension.options.map((opt, i) => (
-              <label key={i} style={{
-                display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", marginBottom: 8,
-                borderRadius: 10, cursor: "pointer", fontSize: 14, lineHeight: 1.5,
-                border: comprehensionAnswer === i ? "2px solid #4f46e5" : "2px solid #e5e7eb",
-                background: comprehensionAnswer === i ? "#eef2ff" : "#fff",
-                color: "#333", transition: "all 0.15s",
-              }} onClick={() => setComprehensionAnswer(i)}>
-                <input type="radio" name="comp" checked={comprehensionAnswer === i} onChange={() => setComprehensionAnswer(i)}
-                  style={{ marginTop: 2, accentColor: "#4f46e5" }} />
-                <span>{opt}</span>
-              </label>
+        {phase === "confidence" && (<>
+          <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px", color: "#111" }}>{t.confTitle}</h3>
+          <p style={{ fontSize: 15, color: "#555", margin: "0 0 16px", lineHeight: 1.5 }}>{t.confQuestion}</p>
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, margin: "20px 0" }}>
+            {[1,2,3,4,5].map(v => (
+              <button key={v} onClick={() => setConfidence(v)} style={{ width: 48, height: 48, borderRadius: 12, border: confidence === v ? "2px solid #4f46e5" : "2px solid #e5e7eb", background: confidence === v ? "#4f46e5" : "#fff", color: confidence === v ? "#fff" : "#555", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>{v}</button>
             ))}
-            <div style={{ textAlign: "right" }}>
-              <button onClick={handleComprehension} disabled={comprehensionAnswer === null}
-                style={{ ...btnNext, opacity: comprehensionAnswer !== null ? 1 : 0.4, cursor: comprehensionAnswer !== null ? "pointer" : "not-allowed" }}>
-                Next →
-              </button>
-            </div>
-          </>
-        )}
-
-        {phase === "confidence" && (
-          <>
-            <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px", color: "#111" }}>Confidence Rating</h3>
-            <p style={{ fontSize: 15, color: "#555", margin: "0 0 16px", lineHeight: 1.5 }}>
-              How confident are you that you made the right decision on this scenario?
-            </p>
-            <div style={{ display: "flex", justifyContent: "center", gap: 8, margin: "20px 0" }}>
-              {[1, 2, 3, 4, 5].map((v) => (
-                <button key={v} onClick={() => setConfidence(v)} style={{
-                  width: 48, height: 48, borderRadius: 12,
-                  border: confidence === v ? "2px solid #4f46e5" : "2px solid #e5e7eb",
-                  background: confidence === v ? "#4f46e5" : "#fff",
-                  color: confidence === v ? "#fff" : "#555",
-                  fontSize: 18, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
-                }}>
-                  {v}
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
-              <span>Not confident</span><span>Very confident</span>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <button onClick={handleSubmit} style={btnNext}>
-                {scenarioIndex < total - 1 ? "Next Scenario →" : "Finish Scenarios →"}
-              </button>
-            </div>
-          </>
-        )}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}><span>{t.notConfident}</span><span>{t.veryConfident}</span></div>
+          <div style={{ textAlign: "right" }}>
+            <button onClick={handleSubmit} style={btnNext}>{scenarioIndex < total - 1 ? t.nextScenario : t.finishScenarios}</button>
+          </div>
+        </>)}
       </div>
     </div>
   );
 }
 
 function PostStudyPage({ onSubmit }) {
+  const t = UI[useLang()];
   const [annoyance, setAnnoyance] = useState({ A: 3, B: 3, C: 3 });
   const [preference, setPreference] = useState("");
   const [openText, setOpenText] = useState("");
-
-  const condDescs = [
-    { key: "A", label: "Condition A — Generic Warning", desc: "A simple red warning with no specific reasons — just \"this site may be dangerous\"." },
-    { key: "B", label: "Condition B — Warning + Reasons", desc: "An amber warning listing specific reasons why the page was flagged." },
-    { key: "C", label: "Condition C — Skill-Based Coach", desc: "A blue coaching panel that explained the attack technique, recommended an action, and gave a transferable tip." },
-  ];
+  const conds = [{ key: "A", ...t.condA }, { key: "B", ...t.condB }, { key: "C", ...t.condC }];
 
   return (
     <div style={pageContainer}>
       <div style={card}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#111" }}>Final Questions</h2>
-        <p style={{ fontSize: 14, color: "#555", margin: "0 0 24px" }}>
-          You saw three different types of security warnings during the study. Please rate each one.
-        </p>
-
-        {condDescs.map(({ key, label, desc }) => (
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#111" }}>{t.finalQTitle}</h2>
+        <p style={{ fontSize: 14, color: "#555", margin: "0 0 24px" }}>{t.finalQSub}</p>
+        {conds.map(({ key, label, desc }) => (
           <div key={key} style={{ marginBottom: 20, padding: "14px 16px", background: "#f8fafc", borderRadius: 10 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#111", marginBottom: 4 }}>{label}</div>
             <div style={{ fontSize: 13, color: "#666", marginBottom: 10 }}>{desc}</div>
-            <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>
-              How <strong>annoying or disruptive</strong> did you find this warning? ({annoyance[key]}/5)
-            </div>
-            <input type="range" min={1} max={5} step={1} value={annoyance[key]}
-              onChange={(e) => setAnnoyance((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
-              style={{ width: "100%", accentColor: "#4f46e5" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#aaa" }}>
-              <span>Not annoying</span><span>Very annoying</span>
-            </div>
+            <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }} dangerouslySetInnerHTML={{ __html: t.annoyanceQ(annoyance[key]).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+            <input type="range" min={1} max={5} step={1} value={annoyance[key]} onChange={e => setAnnoyance(p => ({ ...p, [key]: Number(e.target.value) }))} style={{ width: "100%", accentColor: "#4f46e5" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#aaa" }}><span>{t.notAnnoying}</span><span>{t.veryAnnoying}</span></div>
           </div>
         ))}
-
-        <FieldLabel label="Which warning style would you most want in your real browser?">
-          <SelectGroup options={[
-            "A — Generic Warning",
-            "B — Warning + Reasons",
-            "C — Skill-Based Coach",
-            "None of them",
-          ]} value={preference} onChange={setPreference} />
-        </FieldLabel>
-
-        <FieldLabel label="Why? (Optional — a sentence or two is fine)">
-          <textarea value={openText} onChange={(e) => setOpenText(e.target.value)}
-            rows={3} placeholder="Tell us briefly why you preferred that option..."
+        <FieldLabel label={t.prefLabel}><SelectGroup options={t.prefOpts} value={preference} onChange={setPreference} /></FieldLabel>
+        <FieldLabel label={t.whyLabel}>
+          <textarea value={openText} onChange={e => setOpenText(e.target.value)} rows={3} placeholder={t.whyPlaceholder}
             style={{ width: "100%", borderRadius: 8, border: "1px solid #d1d5db", padding: "10px 12px", fontSize: 14, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
         </FieldLabel>
-
         <div style={{ textAlign: "right" }}>
-          <button onClick={() => onSubmit({ annoyance, preference, openText })} style={btnNext}>
-            Complete Study →
-          </button>
+          <button onClick={() => onSubmit({ annoyance, preference, openText })} style={btnNext}>{t.completeStudy}</button>
         </div>
       </div>
     </div>
@@ -938,6 +846,7 @@ function PostStudyPage({ onSubmit }) {
 }
 
 function CompletionPage({ data }) {
+  const t = UI[useLang()];
   const [submitState, setSubmitState] = useState("idle");
   const [emailOpened, setEmailOpened] = useState(false);
   const hasAttempted = useRef(false);
@@ -946,128 +855,38 @@ function CompletionPage({ data }) {
     if (hasAttempted.current) return;
     hasAttempted.current = true;
     setSubmitState("submitting");
-
-    const jsonPayload = JSON.stringify(data);
     const formData = new URLSearchParams();
-    formData.append(GOOGLE_FORM_ENTRY, jsonPayload);
-
-    fetch(GOOGLE_FORM_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
-    })
-      .then(() => {
-        setSubmitState("success");
-      })
-      .catch(() => {
-        setSubmitState("failed");
-      });
+    formData.append(GOOGLE_FORM_ENTRY, JSON.stringify(data));
+    fetch(GOOGLE_FORM_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData.toString() })
+      .then(() => setSubmitState("success"))
+      .catch(() => setSubmitState("failed"));
   }, [data]);
 
-  const mailtoLink = buildMailtoLink(data);
-
-  const handleSendEmail = () => {
-    window.open(mailtoLink, "_blank");
-    setEmailOpened(true);
-  };
-
-  const downloadCSV = () => {
-    const csv = buildCSV(data);
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `safe-interceptor-${data.participantId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadJSON = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `safe-interceptor-${data.participantId}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const downloadCSV = () => { const b = new Blob([buildCSV(data)], { type: "text/csv" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = `safe-interceptor-${data.participantId}.csv`; a.click(); URL.revokeObjectURL(u); };
+  const downloadJSON = () => { const b = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = `safe-interceptor-${data.participantId}.json`; a.click(); URL.revokeObjectURL(u); };
 
   return (
     <div style={pageContainer}>
       <div style={{ ...card, textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>
-          {submitState === "submitting" ? "⏳" : "✅"}
-        </div>
-        <h2 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 8px", color: "#111" }}>
-          Thank You!
-        </h2>
-
-        {submitState === "submitting" && (
-          <div style={{
-            background: "#eff6ff", border: "2px solid #93c5fd", borderRadius: 12,
-            padding: "16px 20px", margin: "16px 0",
-          }}>
-            <p style={{ fontSize: 14, color: "#1e40af", margin: 0 }}>
-              Sending your results automatically...
-            </p>
-          </div>
-        )}
-
-        {submitState === "success" && (
-          <div style={{
-            background: "#f0fdf4", border: "2px solid #22c55e", borderRadius: 12,
-            padding: "16px 20px", margin: "16px 0",
-          }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#15803d", margin: "0 0 4px" }}>
-              Your results have been submitted successfully
-            </p>
-            <p style={{ fontSize: 13, color: "#166534", margin: 0 }}>
-              No further action needed. You may close this tab. Thank you for participating!
-            </p>
-          </div>
-        )}
-
+        <div style={{ fontSize: 48, marginBottom: 12 }}>{submitState === "submitting" ? "⏳" : "✅"}</div>
+        <h2 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 8px", color: "#111" }}>{t.thankYou}</h2>
+        {submitState === "submitting" && <div style={{ background: "#eff6ff", border: "2px solid #93c5fd", borderRadius: 12, padding: "16px 20px", margin: "16px 0" }}><p style={{ fontSize: 14, color: "#1e40af", margin: 0 }}>{t.submitting}</p></div>}
+        {submitState === "success" && <div style={{ background: "#f0fdf4", border: "2px solid #22c55e", borderRadius: 12, padding: "16px 20px", margin: "16px 0" }}><p style={{ fontSize: 15, fontWeight: 600, color: "#15803d", margin: "0 0 4px" }}>{t.successTitle}</p><p style={{ fontSize: 13, color: "#166534", margin: 0 }}>{t.successSub}</p></div>}
         {submitState === "failed" && (
-          <div style={{
-            background: "#fef2f2", border: "2px solid #fca5a5", borderRadius: 12,
-            padding: "16px 20px", margin: "16px 0",
-          }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#991b1b", margin: "0 0 12px" }}>
-              Automatic submission could not connect. Please send your results manually:
-            </p>
-            <button onClick={handleSendEmail} style={{
-              background: "#16a34a", color: "#fff", border: "none", borderRadius: 10,
-              padding: "12px 28px", fontSize: 15, fontWeight: 700, cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(22,163,74,0.3)",
-            }}>
-              Send Results via Email
-            </button>
-            {emailOpened && (
-              <p style={{ marginTop: 8, fontSize: 13, color: "#15803d", fontWeight: 600 }}>
-                Email opened — please hit Send in your email app.
-              </p>
-            )}
+          <div style={{ background: "#fef2f2", border: "2px solid #fca5a5", borderRadius: 12, padding: "16px 20px", margin: "16px 0" }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "#991b1b", margin: "0 0 12px" }}>{t.failedTitle}</p>
+            <button onClick={() => { window.open(buildMailtoLink(data), "_blank"); setEmailOpened(true); }} style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{t.sendEmail}</button>
+            {emailOpened && <p style={{ marginTop: 8, fontSize: 13, color: "#15803d", fontWeight: 600 }}>{t.emailOpened}</p>}
           </div>
         )}
-
         <details style={{ textAlign: "left", marginTop: 20 }}>
-          <summary style={{ fontSize: 13, color: "#888", cursor: "pointer", marginBottom: 8 }}>
-            Need a copy of your data? Download it here
-          </summary>
+          <summary style={{ fontSize: 13, color: "#888", cursor: "pointer", marginBottom: 8 }}>{t.downloadPrompt}</summary>
           <div style={{ display: "flex", gap: 10, justifyContent: "center", padding: "8px 0" }}>
-            <button onClick={downloadCSV} style={{ ...btnNext, background: "#6366f1", fontSize: 13, padding: "8px 16px", marginTop: 0 }}>
-              Download CSV
-            </button>
-            <button onClick={downloadJSON} style={{ ...btnNext, background: "#475569", fontSize: 13, padding: "8px 16px", marginTop: 0 }}>
-              Download JSON
-            </button>
+            <button onClick={downloadCSV} style={{ ...btnNext, background: "#6366f1", fontSize: 13, padding: "8px 16px", marginTop: 0 }}>{t.downloadCSV}</button>
+            <button onClick={downloadJSON} style={{ ...btnNext, background: "#475569", fontSize: 13, padding: "8px 16px", marginTop: 0 }}>{t.downloadJSON}</button>
           </div>
         </details>
-
-        <p style={{ marginTop: 20, fontSize: 12, color: "#bbb" }}>
-          Participant ID: {data.participantId}
-        </p>
+        <p style={{ marginTop: 20, fontSize: 12, color: "#bbb" }}>Participant ID: {data.participantId}</p>
       </div>
     </div>
   );
@@ -1076,131 +895,71 @@ function CompletionPage({ data }) {
 // ---------- HELPERS ----------
 
 function FieldLabel({ label, children }) {
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginBottom: 8 }}>{label}</div>
-      {children}
-    </div>
-  );
+  return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginBottom: 8 }}>{label}</div>{children}</div>;
 }
 
 function SelectGroup({ options, value, onChange }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-      {options.map((opt) => (
+      {options.map(opt => (
         <button key={opt} onClick={() => onChange(opt)} style={{
           padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer",
           border: value === opt ? "2px solid #4f46e5" : "2px solid #e5e7eb",
           background: value === opt ? "#eef2ff" : "#fff",
           color: value === opt ? "#4338ca" : "#555",
-          fontWeight: value === opt ? 600 : 400, transition: "all 0.15s",
-        }}>
-          {opt}
-        </button>
+          fontWeight: value === opt ? 600 : 400,
+        }}>{opt}</button>
       ))}
     </div>
   );
 }
 
-const pageContainer = {
-  minHeight: "100vh",
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "center",
-  padding: "40px 16px",
-  background: "#f1f5f9",
-  fontFamily: "'Outfit', system-ui, -apple-system, sans-serif",
-};
-
-const card = {
-  background: "#fff",
-  borderRadius: 16,
-  padding: "32px 28px",
-  maxWidth: 520,
-  width: "100%",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)",
-};
+const pageContainer = { minHeight: "100vh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", background: "#f1f5f9", fontFamily: "'Outfit', system-ui, -apple-system, sans-serif" };
+const card = { background: "#fff", borderRadius: 16, padding: "32px 28px", maxWidth: 520, width: "100%", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)" };
 
 // ---------- MAIN APP ----------
 
 function App() {
-  const [stage, setStage] = useState("consent");
+  const [lang, setLang] = useState(null);
+  const [stage, setStage] = useState("lang");
   const [demographics, setDemographics] = useState(null);
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [scenarioResults, setScenarioResults] = useState([]);
   const [allData, setAllData] = useState(null);
 
   const [latinGroup] = useState(() => Date.now() % LATIN_SQUARES.length);
-  const scenarios = useRef(buildScenarioSequence(latinGroup));
+  const scenarios = useRef(null);
   const participantId = useRef(`P${Date.now().toString(36).toUpperCase()}`);
 
-  const totalScenarios = scenarios.current.length;
-
-  const handleConsent = () => setStage("demographics");
-
-  const handleDemographics = (data) => {
-    setDemographics(data);
-    setStage("scenario");
-  };
+  const handleLang = (l) => { setLang(l); scenarios.current = buildScenarioSequence(latinGroup, l); setStage("consent"); };
+  const totalScenarios = scenarios.current ? scenarios.current.length : 8;
 
   const handleScenarioComplete = (result) => {
     const updated = [...scenarioResults, result];
     setScenarioResults(updated);
-
-    if (scenarioIndex < totalScenarios - 1) {
-      setScenarioIndex(scenarioIndex + 1);
-    } else {
-      setStage("postStudy");
-    }
+    if (scenarioIndex < totalScenarios - 1) setScenarioIndex(scenarioIndex + 1);
+    else setStage("postStudy");
   };
 
   const handlePostStudy = (postData) => {
-    const fullData = {
-      participantId: participantId.current,
-      latinGroup,
-      demographics,
-      scenarioResults,
-      postStudy: postData,
-      completedAt: new Date().toISOString(),
-    };
+    const fullData = { participantId: participantId.current, latinGroup, language: lang, demographics, scenarioResults, postStudy: postData, completedAt: new Date().toISOString() };
     setAllData(fullData);
     setStage("complete");
   };
 
-  useEffect(() => {
-    const link = document.createElement("link");
-    link.href = "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap";
-    link.rel = "stylesheet";
-    document.head.appendChild(link);
-  }, []);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [stage, scenarioIndex]);
+  useEffect(() => { const link = document.createElement("link"); link.href = "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"; link.rel = "stylesheet"; document.head.appendChild(link); }, []);
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [stage, scenarioIndex]);
 
   return (
-    <>
-      <style>{`
-        * { box-sizing: border-box; margin: 0; }
-        body { margin: 0; background: #f1f5f9; }
-        input[type="range"] { height: 6px; }
-        button:active { transform: scale(0.97); }
-      `}</style>
-
-      {stage === "consent" && <ConsentPage onConsent={handleConsent} />}
-      {stage === "demographics" && <DemographicsPage onSubmit={handleDemographics} />}
-      {stage === "scenario" && (
-        <ScenarioPage
-          key={scenarioIndex}
-          scenario={scenarios.current[scenarioIndex]}
-          scenarioIndex={scenarioIndex}
-          total={totalScenarios}
-          onComplete={handleScenarioComplete}
-        />
-      )}
+    <LangContext.Provider value={lang || "en"}>
+      <style>{`* { box-sizing: border-box; margin: 0; } body { margin: 0; background: #f1f5f9; } input[type="range"] { height: 6px; } button:active { transform: scale(0.97); }`}</style>
+      {stage === "lang" && <LangPickerPage onSelect={handleLang} />}
+      {stage === "consent" && <ConsentPage onConsent={() => setStage("demographics")} />}
+      {stage === "demographics" && <DemographicsPage onSubmit={(d) => { setDemographics(d); setStage("scenario"); }} />}
+      {stage === "scenario" && scenarios.current && <ScenarioPage key={scenarioIndex} scenario={scenarios.current[scenarioIndex]} scenarioIndex={scenarioIndex} total={totalScenarios} onComplete={handleScenarioComplete} />}
       {stage === "postStudy" && <PostStudyPage onSubmit={handlePostStudy} />}
       {stage === "complete" && <CompletionPage data={allData} />}
-    </>
+    </LangContext.Provider>
   );
 }
 
